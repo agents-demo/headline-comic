@@ -3,7 +3,9 @@ name = "headline-comic"
 version = "0.1.0"
 description = "A live demo that turns five news stories into a short fictional comic and video."
 requires-python = ">=3.11,<3.12"
-dependencies = []
+dependencies = [
+    "openjiuwen @ git+https://gitcode.com/openJiuwen/agent-core.git@b5f189ba1054a338d8fa3e009b13053776340e44",
+]
 
 [dependency-groups]
 dev = ["pytest>=8,<9"]

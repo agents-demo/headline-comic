@@ -1,0 +1,12 @@
+[project]
+name = "headline-comic"
+version = "0.1.0"
+description = "A live demo that turns five news stories into a short fictional comic and video."
+requires-python = ">=3.11,<3.12"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest>=8,<9"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

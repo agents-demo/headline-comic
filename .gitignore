@@ -1,0 +1,16 @@
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.py[cod]
+
+# Runtime artifacts and local generated media
+runs/*
+!runs/.gitkeep
+demo/*
+!demo/.gitkeep
+assets/cast/*
+!assets/cast/.gitkeep
+assets/music/*
+!assets/music/.gitkeep

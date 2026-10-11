@@ -1,7 +1,7 @@
 # Implementation Plan: Headline Comic
 
 **Spec**: `specs/001-headline-comic/spec.md` (revision 3, 2026-10-11)
-**Window**: 10 working days, Sunday 2026-10-11 to Thursday 2026-10-22 (Sunday to Thursday weeks), two people in two tracks. The date and the team size are assumptions (spec open question 1). A solo variant is in section 5.
+**Window**: 10 working days, Sunday 2026-10-11 to Thursday 2026-10-22 (Sunday to Thursday weeks), two people in two tracks. The presenter confirmed two people and an approximate presentation date around two weeks from 2026-10-11; the exact date remains TBD. A solo variant is in section 5.
 **Stack**: Python 3.11, jiuwenswarm (core: Swarmflow, Leader/Teammates, Skill packages, Permission Engine), ffmpeg, Tavily (article text), a small local web UI (Streamlit or FastAPI plus one HTML page) for the live demo.
 
 ## 1. Architecture
@@ -75,7 +75,7 @@ The Swarmflow budget is a token budget, not a currency cap. The currency budget 
 2. **One keyframe per shot.** The storyboard has 8-10 shots. Each gets one clean 16:9 keyframe at 720p with no text. Six of them (one per beat) are the comic panels. Text is added to copies only.
 3. **Video path A (primary).** Image-to-video from each shot's keyframe, 720p, 4-8 s per shot, generated in parallel. Provider chosen in the spike behind `VideoProvider.generate(image, prompt, seconds) -> path`. If the spike shows that first-and-last-frame mode holds characters better, S10 also generates an end keyframe per shot; this is decided in T005.
 4. **Video path B (fallback, every run).** Animated stills: slow pan and zoom over the keyframes via ffmpeg. No parallax and no sprite animation, since both need layer separation. Works offline from the keyframes and the cached audio.
-5. **Text and audio.** Captions and bubbles drawn by Pillow; subtitles by ffmpeg, using the narration text; narration by a TTS provider, cached per run; music from a licensed or royalty-free local file. Narration is capped at 2 words per second of shot duration; if a clip still runs long, the shot's last frame is held. If TTS fails, the video ships with subtitles and music only.
+5. **Text and audio.** Captions and bubbles drawn by Pillow; subtitles by ffmpeg, using the narration text; narration by a TTS provider behind an adapter, cached per run; music from a licensed or royalty-free local file. Narration is capped at 2 words per second of shot duration; if a clip still runs long, the shot's last frame is held. If TTS fails, the video ships with subtitles and music only. Total assembled duration is strictly under 60 seconds.
 6. **News.** Two jobs, two tools.
    - The candidate list comes from publishers' RSS feeds, confirmed in the spike; candidates are BBC, the Guardian, NPR, Al Jazeera, plus Times of Israel or Ynet. A front-page feed is already an editor's choice of top stories, it is free, and it keeps the ranking explainable. Reuters and AP are not used: neither offers its own public feed any more.
    - The article text comes from the Tavily Extract API for the five chosen URLs. If Extract fails for an article, use the feed description; if that is too thin, the presenter pastes text. A local readability extractor is added only if the spike shows Extract failing on a chosen publisher.

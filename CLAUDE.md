@@ -20,6 +20,7 @@ Use the two-person schedule in `plan.md` section 5. Track A owns news, text, flo
 headline-comic/
   .specify/                      # spec-kit scaffolding, if present
   specs/001-headline-comic/      # spec, plan, and task checklist
+  config/                        # confirmed publisher feed list
   docs/                          # API notes, provider notes, style bible
   src/flow/                      # Swarmflow graph and HITL stages
   src/agents/                    # agent prompts and schemas

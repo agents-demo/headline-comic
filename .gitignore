@@ -3,6 +3,7 @@
 __pycache__/
 .pytest_cache/
 .ruff_cache/
+logs/
 *.py[cod]
 
 # Runtime artifacts and local generated media

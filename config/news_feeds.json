@@ -1,0 +1,38 @@
+{
+  "checked_at": "2026-10-11",
+  "candidate_feeds": [
+    {
+      "publisher": "BBC",
+      "url": "https://feeds.bbci.co.uk/news/world/rss.xml",
+      "status": "active"
+    },
+    {
+      "publisher": "The Guardian",
+      "url": "https://www.theguardian.com/world/rss",
+      "status": "active"
+    },
+    {
+      "publisher": "NPR",
+      "url": "https://feeds.npr.org/1001/rss.xml",
+      "status": "active"
+    },
+    {
+      "publisher": "Ynet",
+      "url": "https://www.ynet.co.il/Integration/StoryRss3082.xml",
+      "status": "active"
+    }
+  ],
+  "tested_but_not_enabled": [
+    {
+      "publisher": "Al Jazeera",
+      "url": "https://www.aljazeera.com/xml/rss/all.xml",
+      "status": "timeout"
+    },
+    {
+      "publisher": "The Times of Israel",
+      "url": "https://www.timesofisrael.com/feed/",
+      "status": "working_but_content_terms_need_review"
+    }
+  ],
+  "tavily_news_search": "pending_T003_api_comparison"
+}

@@ -94,6 +94,8 @@ headline-comic/
   .specify/                      # spec-kit scaffolding
   specs/001-headline-comic/
     spec.md  plan.md  tasks.md
+  config/
+    news_feeds.json              # confirmed RSS feed list
   docs/
     api-notes.md                 # T002 answers
     provider-notes.md            # T003 and T004 measurements, T005 decisions

@@ -79,6 +79,10 @@ The `verifier` skill (`src/skills/verifier.py`) is the independent second opinio
 
 A live run over the T011-T014 artifacts passed 4/5 and flagged `verify-causation`. That is a correct catch, not a false alarm: the underlying news of 2026-10-12 included a school incident, and the Writer had recast it as a harmless "guitar case popper" prank at a school — a weak/contradictory causal chain that also risks evoking a real tragedy. This is exactly the kind of issue the Verifier exists to flag; the T017/T018 wiring will route it back to the Writer (max two loops, then stop at approval with failures listed). The run is saved under `runs/t016-live/`.
 
+## T017 — HITL gates and approval screen (2026-10-12)
+
+The two human gates live in `src/flow/hitl.py` as pure functions and `src/ui/render.py` renders the approval screen deterministically. One non-obvious detail worth recording: the T016 Verifier emits its checks with `owner` set to the stage the failure routes back to (`summary` for `verify-summaries`, `story` for the rest) — the same `owner` values code checks use — so the approval gate tells a code check from a Verifier check by which document it came from (`checks.json` vs `verifier.json`), never by `owner`. Code-check failures block approval and cannot be overridden; only failing Verifier checks may be overridden, one id at a time, and each override is appended to `run.log`. The approval record (`approval.json`) is what the T007 guard reads back before any paid media call.
+
 ## AniDoodle video spike - complete (2026-10-12)
 
 AniDoodle is selected as the immediate local, code-drawn video path. Its direct per-still/frame price and per-video price are both USD 0 because rendering is local and does not call a paid generation provider. Local CPU time, storage, and engineering time are not included in those unit prices. Audio is disabled; no TTS or music request has been made. Full integration notes and the runnable proof script are in `docs/anidoodle.md` and `scripts/anidoodle/render_gate0.mjs`.

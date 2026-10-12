@@ -191,6 +191,70 @@ class GenerationWiringTests(unittest.TestCase):
             self.assertTrue(pipeline.state["verifier"]["passed"])
             self.assertEqual(len(pipeline.state["verifier"]["checks"]), 5)
 
+    def _summaries_chat(self):
+        import json as _json
+
+        def chat(messages):
+            return ChatResult(
+                content=_json.dumps(
+                    {
+                        "sentences": [
+                            {"text": "first.", "ledger_fact_ids": ["f1-1"]},
+                            {"text": "second.", "ledger_fact_ids": ["f1-2"]},
+                        ]
+                    }
+                ),
+                model="test",
+                prompt_tokens=1,
+                completion_tokens=1,
+            )
+
+        return chat
+
+    def _story_chat(self):
+        import json as _json
+
+        def chat(messages):
+            return ChatResult(
+                content=_json.dumps({"title": "A Walk", "beats": [{"text": f"beat {i}"} for i in range(6)]}),
+                model="test",
+                prompt_tokens=1,
+                completion_tokens=1,
+            )
+
+        return chat
+
+    def test_generate_summaries_uses_the_module_not_the_function(self) -> None:
+        # Regression: src/skills re-exports ``summarise`` the *function*, which
+        # once shadowed the module in the pipeline import and broke the
+        # ``summarise.summarise(...)`` call in _generate_summaries.
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger, _, _ = self._fixture()
+            pipeline = TextPipeline(
+                workspace_root=Path(tmp),
+                run_id="r1",
+                selected_ids=["c1", "c2", "c3", "c4", "c5"],
+                chat=self._summaries_chat(),
+            )
+            pipeline.state["ledger"] = ledger
+            pipeline._generate_summaries()
+            self.assertEqual(len(pipeline.state["summary_list"]), 5)
+            self.assertEqual(len(pipeline.state["summaries"]["summaries"]), 5)
+
+    def test_generate_story_runs_over_fixture_summaries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pipeline = TextPipeline(
+                workspace_root=Path(tmp),
+                run_id="r1",
+                selected_ids=["c1", "c2", "c3", "c4", "c5"],
+                chat=self._story_chat(),
+            )
+            pipeline.state["summary_list"] = [
+                {"story_id": f"story-{i}", "sentences": []} for i in range(1, 6)
+            ]
+            pipeline._generate_story()
+            self.assertEqual(len(pipeline.state["story"]["beats"]), 6)
+
 
 class RetryLoopTests(unittest.TestCase):
     def test_recovers_on_retry(self) -> None:

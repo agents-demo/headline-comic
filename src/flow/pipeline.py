@@ -32,6 +32,7 @@ to-overwrite guards intact while still allowing a bounded number of retries.
 
 from __future__ import annotations
 
+import importlib
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -54,7 +55,14 @@ from src.flow.token_budget import (
     TokenBudget,
 )
 from src.providers.llm import ChatResult, DeepSeekChatProvider
-from src.skills import article_ledger, article_text, checks, news_fetch, safety, story, storyboard, summarise, verifier
+from src.skills import article_ledger, article_text, checks, news_fetch, safety, story, storyboard, verifier
+
+# ``src.skills`` re-exports the ``summarise`` *function* under the same name, so
+# both ``from src.skills import summarise`` and ``import src.skills.summarise``
+# bind the function (the package attribute) and shadow the module. Resolve the
+# module straight from ``sys.modules`` so ``summarise.summarise`` and friends
+# reach the skill's entry points.
+summarise = importlib.import_module("src.skills.summarise")
 
 Chat = Callable[[Sequence[tuple[str, str]]], ChatResult]
 

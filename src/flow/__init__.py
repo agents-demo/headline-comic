@@ -1,4 +1,4 @@
-"""Pipeline flow: HITL gates and the run.log writer (T017, T018)."""
+"""Pipeline flow: HITL gates, run.log writer, token budget and S1-S9 runner (T017, T018)."""
 
 from .hitl import (
     APPROVAL_FILENAME,
@@ -16,6 +16,17 @@ from .hitl import (
     pick_stories,
     save_approval,
 )
+from .pipeline import (
+    GENERATION_STAGES,
+    OWNER_STAGE,
+    STAGE_ORDER,
+    PipelineError,
+    PipelineResult,
+    StageResult,
+    TextPipeline,
+    rerun_window,
+    route_failures,
+)
 from .runlog import (
     RUN_LOG_NAME,
     append_entry,
@@ -24,16 +35,33 @@ from .runlog import (
     run_log_path,
     validate_run_id,
 )
+from .token_budget import (
+    DEFAULT_TOKEN_LIMIT,
+    TokenAccountingChat,
+    TokenBudget,
+    TokenBudgetExceeded,
+)
 
 __all__ = [
     "APPROVAL_FILENAME",
     "DECISIONS",
+    "DEFAULT_TOKEN_LIMIT",
+    "GENERATION_STAGES",
+    "OWNER_STAGE",
     "REQUIRED_PICKS",
     "RUN_LOG_NAME",
+    "STAGE_ORDER",
     "ApprovalError",
     "ApprovalOutcome",
     "Decision",
     "PickError",
+    "PipelineError",
+    "PipelineResult",
+    "StageResult",
+    "TextPipeline",
+    "TokenAccountingChat",
+    "TokenBudget",
+    "TokenBudgetExceeded",
     "append_entry",
     "build_approval_record",
     "checks_from",
@@ -43,6 +71,8 @@ __all__ = [
     "log_entry",
     "pick_stories",
     "read_entries",
+    "rerun_window",
+    "route_failures",
     "run_log_path",
     "save_approval",
     "validate_run_id",

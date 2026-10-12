@@ -67,6 +67,12 @@ The `storyboard` skill (`src/skills/storyboard.py`) makes a single DeepSeek call
 
 A live run over the T013 story produced a schema-valid 10-shot storyboard totalling 48 s, with every shot's narration at or under 2 words per second. The school "guitar case" framing from the story carries into shots 3-4 and 7-8; the T016 Verifier and the pick-5 safety screen remain the guard for that. The run is saved under `runs/t014-live/`.
 
+## T015 — checks (2026-10-12)
+
+The `checks` skill (`src/skills/checks.py`) is the code layer of FR-006's two-layer verification. It runs 12 deterministic blocking checks over the ledger, summaries, story and storyboard: four JSON schema validations, six-beat mapping, the storyboard FR-016 constraints (one comic panel per beat, at most two cast characters per shot, narration at most two words per second, shot durations summing to 37-51 s), citation checks, and whole-word full-name/surname checks that no ledger person name appears in the story or storyboard. Each result carries an owning stage (`ledger`, `summary`, `story`, `storyboard`) so a failure can be routed back to the agent that owns it; the output is a schema-valid `checks.json`.
+
+A live run over the cached T011-T014 artifacts passed all 12 checks, confirming the end-to-end text pipeline is internally consistent. The run is saved under `runs/t015-live/`.
+
 ## AniDoodle video spike - complete (2026-10-12)
 
 AniDoodle is selected as the immediate local, code-drawn video path. Its direct per-still/frame price and per-video price are both USD 0 because rendering is local and does not call a paid generation provider. Local CPU time, storage, and engineering time are not included in those unit prices. Audio is disabled; no TTS or music request has been made. Full integration notes and the runnable proof script are in `docs/anidoodle.md` and `scripts/anidoodle/render_gate0.mjs`.

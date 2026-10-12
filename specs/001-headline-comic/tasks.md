@@ -14,7 +14,7 @@ Legend: `[A]` Track A (text, flow, UI). `[B]` Track B (visuals, video). `[AB]` b
 - [ ] T006 [A] Define JSON schemas: candidates, ledger (facts with support spans, person names), summaries, story, storyboard (FR-016 fields), checks, cost, run manifest. Write one fixture run by hand in `tests/fixtures/` (ledger, story, storyboard) so Track B can start (3h)
 - [ ] T007 [A] Guards, before any paid pipeline call: budget guard core (estimate from storyboard and unit prices, hard stop, per-run and project totals in `cost.json`); approval record; Permission Engine policies or own guard per T002 for the domain allowlist, paid calls only after approval, writes only to `runs/` and `assets/cast/` (FR-012, FR-014) (3h)
 - **Gate 0**: four framework questions answered; at least 4 working feeds; Tavily Extract returns usable text for at least 8 of 10 test articles; one same-character pair of images plus one shot exist; unit prices recorded; the guard blocks a test generation call made without an approval record.
-- **Gate 0 status**: not passed; the T003 sample produced usable text for 5/10 articles, below the 8/10 threshold. See `docs/provider-notes.md`.
+- **Gate 0 status**: extraction subcriterion met on the revised 10-article sample (8/10 usable); Gate 0 remains open for its other criteria. See `docs/provider-notes.md`.
 
 ## Phase 1 - Text pipeline (Track A, Days 3-7; T009 and T019 on Track B, Day 2) - 43 h
 

@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "shots": [
+    {"shot_id":"shot-01","beat":0,"source_ref":0,"characters":["courier","pigeon"],"camera":"wide establishing view","action":"The courier points toward a winding town path as neighbors gather.","narration":"Tonight, our little town takes the scenic route.","comic_caption":"A small invitation sets off a big walk.","duration_s":5,"comic_panel":true},
+    {"shot_id":"shot-02","beat":1,"source_ref":1,"characters":["courier"],"camera":"slow pan across the harbor path","action":"The courier follows the newly installed lamps along the water.","narration":"New lamps brighten the harbor path.","comic_caption":"The harbor path glows for evening walkers.","duration_s":6,"comic_panel":true},
+    {"shot_id":"shot-03","beat":1,"source_ref":1,"characters":["pigeon"],"camera":"medium tracking shot","action":"The pigeon flutters from one lamp post to the next.","narration":"Pip checks each light along the way.","duration_s":5,"comic_panel":false},
+    {"shot_id":"shot-04","beat":2,"source_ref":2,"characters":["courier","mayor"],"camera":"overhead view of a printed map","action":"They trace an accessible loop beside the river.","narration":"A map offers six routes by the river.","comic_caption":"A clear map makes room for everyone.","duration_s":5,"comic_panel":true},
+    {"shot_id":"shot-05","beat":3,"source_ref":3,"characters":["mayor","pigeon"],"camera":"gentle push-in on the blue canopy","action":"The mayor welcomes walkers beneath the market canopy.","narration":"The market canopy becomes their meeting place.","comic_caption":"Under blue cloth, the group gathers.","duration_s":6,"comic_panel":true},
+    {"shot_id":"shot-06","beat":4,"source_ref":4,"characters":["courier"],"camera":"close view of seed packets","action":"The courier ties bright seed packets to temporary route markers.","narration":"Native flower seeds mark the garden stop.","comic_caption":"A few seeds add color to the route.","duration_s":5,"comic_panel":true},
+    {"shot_id":"shot-07","beat":4,"source_ref":4,"characters":["pigeon"],"camera":"side-follow along garden fence","action":"The pigeon hops past the garden gate beside the walkers.","narration":"Pip leads the last turn past the garden.","duration_s":6,"comic_panel":false},
+    {"shot_id":"shot-08","beat":5,"source_ref":5,"characters":["courier","mayor"],"camera":"wide closing shot","action":"The group waves outside the reopened clock workshop.","narration":"They finish together, right on town time.","dialogue":"Good night, neighbors!","comic_caption":"The clock shop marks the end of a shared stroll.","duration_s":6,"comic_panel":true}
+  ]
+}

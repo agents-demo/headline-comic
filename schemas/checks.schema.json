@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://headline-comic.local/schemas/checks.schema.json",
+  "title": "Deterministic and verifier checks",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "passed", "checks"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "passed": {"type": "boolean"},
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["check_id", "passed", "blocking", "message"],
+        "properties": {
+          "check_id": {"type": "string", "minLength": 1},
+          "passed": {"type": "boolean"},
+          "blocking": {"type": "boolean"},
+          "message": {"type": "string"},
+          "path": {"type": "string"},
+          "owner": {"enum": ["ledger", "summary", "story", "storyboard", "verifier", "system"]}
+        }
+      }
+    }
+  }
+}

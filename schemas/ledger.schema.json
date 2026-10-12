@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://headline-comic.local/schemas/ledger.schema.json",
+  "title": "Selected-article evidence ledger",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "stories"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "stories": {"type": "array", "minItems": 5, "maxItems": 5, "items": {"$ref": "#/$defs/story_ledger"}}
+  },
+  "$defs": {
+    "support_span": {"type": "string", "minLength": 1, "description": "Verbatim span matched against article_text after whitespace normalization."},
+    "story_ledger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["story_id", "url", "publisher", "published_at", "text_source", "article_text", "facts", "quotes", "people"],
+      "properties": {
+        "story_id": {"type": "string", "minLength": 1},
+        "url": {"type": "string", "format": "uri"},
+        "publisher": {"type": "string", "minLength": 1},
+        "published_at": {"type": "string", "format": "date-time"},
+        "text_source": {"enum": ["tavily_extract", "feed_description", "presenter_paste"]},
+        "article_text": {"type": "string", "minLength": 1, "description": "Stored locally and never displayed."},
+        "facts": {"type": "array", "items": {"$ref": "#/$defs/fact"}},
+        "quotes": {"type": "array", "items": {"$ref": "#/$defs/quote"}},
+        "people": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "fact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fact_id", "kind", "claim", "support_span", "verified"],
+      "properties": {
+        "fact_id": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["who", "what", "when", "where"]},
+        "claim": {"type": "string", "minLength": 1},
+        "support_span": {"$ref": "#/$defs/support_span"},
+        "verified": {"const": true}
+      }
+    },
+    "quote": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["quote_id", "text", "support_span", "verified"],
+      "properties": {
+        "quote_id": {"type": "string", "minLength": 1},
+        "text": {"type": "string", "minLength": 1},
+        "support_span": {"$ref": "#/$defs/support_span"},
+        "verified": {"const": true}
+      },
+      "description": "Code enforces the 25-word quote limit and support-span matching."
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://headline-comic.local/schemas/cost.schema.json",
+  "title": "Run and project cost record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "currency", "run_estimate_usd", "run_actual_usd", "run_budget_usd", "project_total_usd", "project_budget_usd", "items", "tavily_credits"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "currency": {"const": "USD"},
+    "run_estimate_usd": {"type": "number", "minimum": 0},
+    "run_actual_usd": {"type": "number", "minimum": 0},
+    "run_budget_usd": {"type": "number", "exclusiveMinimum": 0},
+    "project_total_usd": {"type": "number", "minimum": 0},
+    "project_budget_usd": {"type": "number", "exclusiveMinimum": 0},
+    "items": {"type": "array", "items": {"$ref": "#/$defs/cost_item"}},
+    "tavily_credits": {"type": "number", "minimum": 0}
+  },
+  "$defs": {
+    "cost_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["category", "provider", "unit", "quantity", "unit_price_usd", "estimated_usd", "actual_usd"],
+      "properties": {
+        "category": {"enum": ["image", "video", "tts", "llm", "local_compute"]},
+        "provider": {"type": "string", "minLength": 1},
+        "unit": {"type": "string", "minLength": 1},
+        "quantity": {"type": "number", "minimum": 0},
+        "unit_price_usd": {"type": "number", "minimum": 0},
+        "estimated_usd": {"type": "number", "minimum": 0},
+        "actual_usd": {"type": "number", "minimum": 0}
+      }
+    }
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://headline-comic.local/schemas/storyboard.schema.json",
+  "title": "Video and comic storyboard",
+  "description": "Per-shot checks live here; aggregate word-rate and duration-sum rules are documented in schemas/README.md and must be enforced by code.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "shots"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "shots": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 10,
+      "items": {"$ref": "#/$defs/shot"},
+      "allOf": [
+        {"contains": {"$ref": "#/$defs/comicBeat0"}, "minContains": 1, "maxContains": 1},
+        {"contains": {"$ref": "#/$defs/comicBeat1"}, "minContains": 1, "maxContains": 1},
+        {"contains": {"$ref": "#/$defs/comicBeat2"}, "minContains": 1, "maxContains": 1},
+        {"contains": {"$ref": "#/$defs/comicBeat3"}, "minContains": 1, "maxContains": 1},
+        {"contains": {"$ref": "#/$defs/comicBeat4"}, "minContains": 1, "maxContains": 1},
+        {"contains": {"$ref": "#/$defs/comicBeat5"}, "minContains": 1, "maxContains": 1}
+      ]
+    }
+  },
+  "$defs": {
+    "shot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shot_id", "beat", "source_ref", "characters", "camera", "action", "narration", "duration_s", "comic_panel"],
+      "properties": {
+        "shot_id": {"type": "string", "minLength": 1},
+        "beat": {"type": "integer", "minimum": 0, "maximum": 5},
+        "source_ref": {"type": "integer", "minimum": 0, "maximum": 5},
+        "characters": {"type": "array", "maxItems": 2, "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z][a-z0-9_-]*$"}},
+        "camera": {"type": "string", "minLength": 1},
+        "action": {"type": "string", "minLength": 1},
+        "narration": {"type": "string"},
+        "dialogue": {"type": "string"},
+        "comic_caption": {"type": "string", "minLength": 1},
+        "duration_s": {"type": "number", "minimum": 4, "maximum": 8},
+        "comic_panel": {"type": "boolean"}
+      },
+      "oneOf": [
+        {"properties": {"beat": {"const": 0}, "source_ref": {"const": 0}}, "required": ["beat", "source_ref"]},
+        {"properties": {"beat": {"const": 1}, "source_ref": {"const": 1}}, "required": ["beat", "source_ref"]},
+        {"properties": {"beat": {"const": 2}, "source_ref": {"const": 2}}, "required": ["beat", "source_ref"]},
+        {"properties": {"beat": {"const": 3}, "source_ref": {"const": 3}}, "required": ["beat", "source_ref"]},
+        {"properties": {"beat": {"const": 4}, "source_ref": {"const": 4}}, "required": ["beat", "source_ref"]},
+        {"properties": {"beat": {"const": 5}, "source_ref": {"const": 5}}, "required": ["beat", "source_ref"]}
+      ],
+      "allOf": [
+        {"if": {"properties": {"comic_panel": {"const": true}}, "required": ["comic_panel"]}, "then": {"required": ["comic_caption"]}, "else": {"not": {"required": ["comic_caption"]}}}
+      ]
+    },
+    "comicBeat0": {"properties": {"beat": {"const": 0}, "comic_panel": {"const": true}}, "required": ["beat", "comic_panel"]},
+    "comicBeat1": {"properties": {"beat": {"const": 1}, "comic_panel": {"const": true}}, "required": ["beat", "comic_panel"]},
+    "comicBeat2": {"properties": {"beat": {"const": 2}, "comic_panel": {"const": true}}, "required": ["beat", "comic_panel"]},
+    "comicBeat3": {"properties": {"beat": {"const": 3}, "comic_panel": {"const": true}}, "required": ["beat", "comic_panel"]},
+    "comicBeat4": {"properties": {"beat": {"const": 4}, "comic_panel": {"const": true}}, "required": ["beat", "comic_panel"]},
+    "comicBeat5": {"properties": {"beat": {"const": 5}, "comic_panel": {"const": true}}, "required": ["beat", "comic_panel"]}
+  }
+}

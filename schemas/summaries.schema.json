@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://headline-comic.local/schemas/summaries.schema.json",
+  "title": "Story summaries",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "summaries"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "summaries": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["story_id", "sentences"],
+        "properties": {
+          "story_id": {"type": "string", "minLength": 1},
+          "sentences": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["text", "ledger_fact_ids"],
+              "properties": {
+                "text": {"type": "string", "minLength": 1},
+                "ledger_fact_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

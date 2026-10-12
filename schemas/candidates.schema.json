@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://headline-comic.local/schemas/candidates.schema.json",
+  "title": "Candidate list",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "generated_at", "candidates"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "candidates": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/candidate"}
+    }
+  },
+  "$defs": {
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate_id", "title", "url", "publisher", "published_at", "description", "source", "safety_tags", "hidden_by_safety"],
+      "properties": {
+        "candidate_id": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "minLength": 1},
+        "url": {"type": "string", "format": "uri"},
+        "publisher": {"type": "string", "minLength": 1},
+        "published_at": {"type": "string", "format": "date-time"},
+        "description": {"type": "string"},
+        "source": {"enum": ["rss", "manual", "tavily_search"]},
+        "cluster_id": {"type": ["string", "null"]},
+        "safety_tags": {"type": "array", "uniqueItems": true, "items": {"enum": ["violence", "death", "disaster_casualties", "crime_against_individual", "minors"]}},
+        "hidden_by_safety": {"type": "boolean"}
+      }
+    }
+  }
+}

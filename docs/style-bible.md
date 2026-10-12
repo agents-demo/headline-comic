@@ -201,8 +201,11 @@ assets/cast/
   town.png         # town reference
 ```
 
-Generated once, chosen by hand, committed. They are never regenerated inside a
-run; a run only *reads* them as references.
+Generated once from committed scene code (`scripts/anidoodle/cast/` +
+`scripts/anidoodle/render_cast.mjs`) and stored in `assets/cast/`. The PNGs are
+regenerable, so `.gitignore` keeps them out of git (a T001 decision, like
+`runs/`); the source of truth is the committed scene code and the render script.
+They are never regenerated inside a run; a run only *reads* them as references.
 
 ## 7. Consistency rules (D8, D10, SC-2)
 

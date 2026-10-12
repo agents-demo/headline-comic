@@ -15,3 +15,6 @@ assets/cast/*
 !assets/cast/.gitkeep
 assets/music/*
 !assets/music/.gitkeep
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/

@@ -61,6 +61,12 @@ The `story` skill (`src/skills/story.py`) makes a single DeepSeek call that turn
 
 A live run over the cached T012 summaries produced a schema-valid six-beat story with no validation errors. The model kept the fixed cast, avoided real names, and mapped beats 1-5 to sources 1-5 in order. One note for the T016 Verifier: because the source news included a school-related incident, the model's fiction set two beats at a school (a "guitar case popper" prank); nothing is graphic, but the school setting is something the Verifier and the final pick-5 safety screen should keep an eye on. The run is saved under `runs/t013-live/`.
 
+## T014 — Director (2026-10-12)
+
+The `storyboard` skill (`src/skills/storyboard.py`) makes a single DeepSeek call that turns the six-beat story into a storyboard. The model proposes 8-10 shots; code injects `shot_id` and `source_ref` (always equal to `beat`), clamps each `duration_s` into 4-8 s, keeps at most two cast characters per shot, forces exactly one comic panel per beat, and validates against `schemas/storyboard.schema.json`. The aggregate narration word-rate (≤2 words/s) and 37-51 s duration-sum rules stay in the T015 checks skill.
+
+A live run over the T013 story produced a schema-valid 10-shot storyboard totalling 48 s, with every shot's narration at or under 2 words per second. The school "guitar case" framing from the story carries into shots 3-4 and 7-8; the T016 Verifier and the pick-5 safety screen remain the guard for that. The run is saved under `runs/t014-live/`.
+
 ## AniDoodle video spike - complete (2026-10-12)
 
 AniDoodle is selected as the immediate local, code-drawn video path. Its direct per-still/frame price and per-video price are both USD 0 because rendering is local and does not call a paid generation provider. Local CPU time, storage, and engineering time are not included in those unit prices. Audio is disabled; no TTS or music request has been made. Full integration notes and the runnable proof script are in `docs/anidoodle.md` and `scripts/anidoodle/render_gate0.mjs`.

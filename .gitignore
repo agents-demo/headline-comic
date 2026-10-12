@@ -11,6 +11,11 @@ runs/*
 !runs/.gitkeep
 demo/*
 !demo/.gitkeep
+
+# Optional local source checkouts used by the AniDoodle/FFmpeg spike
+/anidoodle/
+/ffmpeg/
+
 assets/cast/*
 !assets/cast/.gitkeep
 assets/music/*

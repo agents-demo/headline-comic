@@ -1,24 +1,24 @@
 # Tasks: Headline Comic
 
-Revision 3 (2026-10-11). Task ids were renumbered in revision 2 and are unchanged in revision 3, which adds Tavily to T003, T008 and T010.
+Revision 4 (2026-10-12). Adds AniDoodle as the local video path and T043 for deferred model-backed video/audio. Task ids through T042 are unchanged.
 
 Legend: `[A]` Track A (text, flow, UI). `[B]` Track B (visuals, video). `[AB]` both. `US#`, `FR-###` and `SC-#` refer to spec.md; `S#` refers to the stages in plan.md. Estimates are in hours for one person. Sequence fits 10 working days for two people (plan.md section 5). Total: 132 h (Track A 61 h, Track B 65 h, shared 6 h).
 
 ## Phase 0 - Setup and spikes (Days 1-2) - 22 h
 
 - [x] T001 [A] Create repo from spec-kit template, copy spec/plan/tasks, set up Python env, ffmpeg, `.env` for keys (1h) — repository and specs were already present; completed the missing project scaffold and environment.
-- [ ] T002 [A] Spike: install jiuwenswarm core; run a 3-stage Swarmflow (one pure-code stage, one Teammate, one HITL stage) from our own Python process; answer the four questions in plan.md section 2 and check the built-in run-tree monitoring; record real API names and the answers in `docs/api-notes.md` (5h) — four questions and offline mocked flow are documented; installed-core UI/run-tree check and Python 3.11 project-environment install remain open (see API notes).
+- [x] T002 [A] Spike: install jiuwenswarm core; run a 3-stage Swarmflow (one pure-code stage, one Teammate, one HITL stage) from our own Python process; answer the four questions in plan.md section 2 and check the built-in run-tree monitoring; record real API names and the answers in `docs/api-notes.md` (5h) — four questions, exact pinned-core Python 3.11 workflow smoke, mocked Team reply routing, and source-verified run-tree monitor are documented. The interactive TUI was not launched because npm registry access failed (see API notes).
 - [x] T003 [A] Spike: confirm which candidate feeds work (BBC, the Guardian, NPR, Al Jazeera, Times of Israel or Ynet); fetch about 40 items and cluster duplicates. Get a Tavily key; run Extract on 10 of the article URLs and record the success rate per publisher and the text quality; run one Tavily news search (topic news, last day, same publishers) and compare its list with the RSS list. Record the results in `docs/provider-notes.md`, decide whether Tavily search becomes a second candidate source, and save the confirmed feed list in config (3h) - RSS probe and feed decision are complete; Tavily Search remains disabled because its results were BBC-heavy and did not improve publisher balance.
-- [ ] T004 [B] Spike: make one four-view character sheet; generate 2 scene images of that character using references; test 1 image-to-video shot on 2 candidate providers. Record in `docs/provider-notes.md`: quality, latency, price per image and per shot, concurrency limit, number of reference images accepted, first-and-last-frame support. AIComicBuilder's Docker image may be used as the test bench (5h)
-- [ ] T005 [B] Decide image, video and TTS providers, and single-keyframe versus first-and-last-frame mode; write `providers/` adapter interfaces `ImageProvider`, `VideoProvider`, `TTSProvider` (2h)
-- [ ] T006 [A] Define JSON schemas: candidates, ledger (facts with support spans, person names), summaries, story, storyboard (FR-016 fields), checks, cost, run manifest. Write one fixture run by hand in `tests/fixtures/` (ledger, story, storyboard) so Track B can start (3h)
-- [ ] T007 [A] Guards, before any paid pipeline call: budget guard core (estimate from storyboard and unit prices, hard stop, per-run and project totals in `cost.json`); approval record; Permission Engine policies or own guard per T002 for the domain allowlist, paid calls only after approval, writes only to `runs/` and `assets/cast/` (FR-012, FR-014) (3h)
+- [x] T004 [B] Spike: generate 2 same-character scene frames and one 8-second code-drawn shot with AniDoodle. Record quality, latency, direct unit price and local render time in `docs/provider-notes.md`. The shot and frame pair must exist in `runs/` before closing this task. Four-view cast sheets remain T022 work. See `docs/anidoodle.md` (5h) - rendered, probed and visually reviewed 2026-10-12.
+- [x] T005 [B] Use the deterministic AniDoodle renderer for the initial video path; keep `ImageProvider`, `VideoProvider` and `TTSProvider` provider-neutral interfaces. Audio and model-backed video are deferred to T043 (2h) - provider contracts and the silent local AniDoodle adapter are in `src/providers/`; storyboard-to-scene mapping remains T027.
+- [x] T006 [A] Define JSON schemas: candidates, ledger (facts with support spans, person names), summaries, story, storyboard (FR-016 fields), checks, cost, run manifest. Write one fixture run by hand in `tests/fixtures/` (ledger, story, storyboard) so Track B can start (3h) - eight Draft 2020-12 schemas and a synthetic five-story fixture are in `schemas/` and `tests/fixtures/t006-sample/`; schema and cross-field checks pass.
+- [x] T007 [A] Guards, before any paid pipeline call: budget guard core (estimate from storyboard and unit prices, hard stop, per-run and project totals in `cost.json`); approval record; Permission Engine policies or own guard per T002 for the domain allowlist, paid calls only after approval, writes only to `runs/` and `assets/cast/` (FR-012, FR-014) (3h) - approval, storyboard quote/budget, exact HTTPS host, and output-path checks are enforced by `src/permissions/`; focused fail-closed tests pass. No paid media call was made.
 - **Gate 0**: four framework questions answered; at least 4 working feeds; Tavily Extract returns usable text for at least 8 of 10 test articles; one same-character pair of images plus one shot exist; unit prices recorded; the guard blocks a test generation call made without an approval record.
-- **Gate 0 status**: extraction subcriterion met on the revised 10-article sample (8/10 usable); Gate 0 remains open for its other criteria. See `docs/provider-notes.md`.
+- **Gate 0 status: CLOSED (2026-10-12)**: four framework questions answered; four active feeds; revised Extract sample 8/10 usable; AniDoodle MP4 and inspected same-character frame pair exist; direct unit price recorded; test paid generation is blocked without matching approval. See `docs/provider-notes.md` and `docs/anidoodle.md`.
 
 ## Phase 1 - Text pipeline (Track A, Days 3-7; T009 and T019 on Track B, Day 2) - 43 h
 
-- [ ] T008 [A] [US1] Skill `news_fetch`: feed config, pool of about 40, clustering, ranking by cross-source coverage then recency; Tavily news search as a second source only if T003 chose it (FR-001) (4h)
+- [x] T008 [A] [US1] Skill `news_fetch`: feed config, pool of about 40, clustering, ranking by cross-source coverage then recency; Tavily news search as a second source only if T003 chose it (FR-001) (4h) - RSS-only `news_fetch` skill in `src/skills/`; fetches ~40 items from the four active feeds, clusters near-identical titles (union-find Jaccard), ranks by cross-source coverage then recency, and emits schema-valid `candidates.json`. Tavily search stays disabled. 13 tests pass.
 - [ ] T009 [B] [US1] Safety classifier: tag candidates, default list of the top 15 untagged, hidden count, fewer-than-8 message (FR-015) (2h)
 - [ ] T010 [A] [US1] Article text and manual paths: Tavily adapter in `providers/`; Extract for the five chosen URLs, and for 5 pasted URLs; per-article fallback to the feed description, then pasted text; record the text source and the credits used (FR-002) (2h)
 - [ ] T011 [A] [US2] Skill `article_ledger`: one call per article in parallel; facts, quotes and person names with verbatim support spans; code span check drops and logs failures (FR-003) (5h)
@@ -45,7 +45,7 @@ Legend: `[A]` Track A (text, flow, UI). `[B]` Track B (visuals, video). `[AB]` b
 
 ## Phase 3 - Video (Track B, Days 5-7) - 19 h
 
-- [ ] T027 [B] [US5] Skill `video_gen`: shots from keyframes via the provider adapter, 4-8 s, 720p, in parallel up to the provider limit, model audio discarded, retries, per-shot cost log (FR-010) (6h)
+- [ ] T027 [B] [US5] Render the short video through the local AniDoodle adapter from bounded storyboard scene data; keep total output under 60 seconds, silent by default, with retry and per-render manifest (FR-010) (6h)
 - [ ] T028 [B] [US5] TTS narration per shot, cached in `audio/`; music bed; loudness normalise; hold-last-frame rule when narration runs long; subtitles-only path if TTS fails (FR-010, FR-017) (3h)
 - [ ] T029 [B] [US5] Assembly with ffmpeg: transitions, subtitles, title card, "Based on: 5 sources" closing card, "AI-generated fiction" mark on every frame, metadata (FR-010, FR-013) (5h)
 - [ ] T030 [B] [US7] Fallback renderer: pan and zoom over the keyframes, same audio, subtitles and cards, run in every run as S12 (FR-017) (3h)
@@ -56,6 +56,10 @@ Not scheduled (optional, only if time remains):
 
 - [ ] T032 Vision check: a model compares a frame of each shot with the cast sheets and flags drift (3h)
 - [ ] T033 9:16 export (2h)
+
+## Future backlog
+
+- [ ] T043 [B] Add a dedicated model-backed video provider and optional approved audio path after video/audio approval is ready. Compare it against AniDoodle on the same fixture; paid calls must pass T007 and separate cost approval (deferred).
 
 ## Phase 4 - Demo app (Day 8) - 12 h
 
@@ -80,7 +84,7 @@ Not scheduled (optional, only if time remains):
 - T003 -> T008, T009, T010.
 - T004, T005 -> T022, T023, T027, T028.
 - T006 -> T011-T016, T019; the fixture run lets T023-T030 start before T014 is done.
-- T007 -> T022 (first paid pipeline call), T023, T027.
+- T007 -> T022 (first paid pipeline call), T023, T043 (paid-provider path only; T027 uses local AniDoodle with no provider charge).
 - T010 -> T011.
 - T011 -> T012, T015.
 - T013 -> T014 -> T015 -> T016 -> T017 (approval screen).

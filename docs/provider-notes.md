@@ -73,6 +73,12 @@ The `checks` skill (`src/skills/checks.py`) is the code layer of FR-006's two-la
 
 A live run over the cached T011-T014 artifacts passed all 12 checks, confirming the end-to-end text pipeline is internally consistent. The run is saved under `runs/t015-live/`.
 
+## T016 — Verifier (2026-10-12)
+
+The `verifier` skill (`src/skills/verifier.py`) is the independent second opinion in FR-006's two-layer verification. It runs on `deepseek-reasoner` — a different model from the generators' `deepseek-chat` — and sees only the ledger, summaries, story and storyboard. It returns pass/fail plus a reason for five fixed items: `verify-summaries`, `verify-causation`, `verify-real-people`, `verify-graphic`, and `verify-satire`. Code fixes the five ids and their owning stages and fails closed on any missing item; the output is a schema-valid `verifier.json`. The model is overridable with `LLM_VERIFIER_MODEL`. The DeepSeek adapter now accepts `temperature=None` so the reasoner call omits the temperature parameter it does not support.
+
+A live run over the T011-T014 artifacts passed 4/5 and flagged `verify-causation`. That is a correct catch, not a false alarm: the underlying news of 2026-10-12 included a school incident, and the Writer had recast it as a harmless "guitar case popper" prank at a school — a weak/contradictory causal chain that also risks evoking a real tragedy. This is exactly the kind of issue the Verifier exists to flag; the T017/T018 wiring will route it back to the Writer (max two loops, then stop at approval with failures listed). The run is saved under `runs/t016-live/`.
+
 ## AniDoodle video spike - complete (2026-10-12)
 
 AniDoodle is selected as the immediate local, code-drawn video path. Its direct per-still/frame price and per-video price are both USD 0 because rendering is local and does not call a paid generation provider. Local CPU time, storage, and engineering time are not included in those unit prices. Audio is disabled; no TTS or music request has been made. Full integration notes and the runnable proof script are in `docs/anidoodle.md` and `scripts/anidoodle/render_gate0.mjs`.

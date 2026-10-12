@@ -82,6 +82,12 @@ from .summarise import (
     sources_from_ledger,
     summarise,
 )
+from .verifier import (
+    VERIFIER_MODEL,
+    build_verifier_document,
+    run as run_verifier,
+    save_verifier,
+)
 
 __all__ = [
     "ArticleText",
@@ -98,6 +104,7 @@ __all__ = [
     "StoryError",
     "StoryRequest",
     "StoryboardError",
+    "VERIFIER_MODEL",
     "allowed_hosts_for",
     "build_articles_document",
     "build_candidates_document",
@@ -106,6 +113,7 @@ __all__ = [
     "build_story",
     "build_storyboard",
     "build_summaries_document",
+    "build_verifier_document",
     "check_beats",
     "check_citations",
     "check_storyboard_characters",
@@ -133,6 +141,7 @@ __all__ = [
     "run_checks_skill",
     "run_director",
     "run_summariser",
+    "run_verifier",
     "run_writer",
     "save_articles_document",
     "save_candidates_document",
@@ -141,6 +150,7 @@ __all__ = [
     "save_story",
     "save_storyboard",
     "save_summaries_document",
+    "save_verifier",
     "sources_from_ledger",
     "span_check",
     "story_request_from_candidate",

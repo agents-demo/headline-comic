@@ -96,7 +96,7 @@ class DeepSeekChatProvider:
         messages: Sequence[Message],
         *,
         json_mode: bool = False,
-        temperature: float = 0.0,
+        temperature: float | None = 0.0,
     ) -> ChatResult:
         if not self.api_key:
             raise ValueError("LLM_API_KEY is not set")
@@ -107,8 +107,9 @@ class DeepSeekChatProvider:
         payload: dict = {
             "model": self.model,
             "messages": [{"role": role, "content": content} for role, content in messages],
-            "temperature": temperature,
         }
+        if temperature is not None:
+            payload["temperature"] = temperature
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
         return self._parse(self._post(payload))

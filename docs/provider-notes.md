@@ -55,6 +55,12 @@ A live validation ran the `article_ledger` skill over the five cached T010 artic
 
 The `summarise` skill reuses the DeepSeek adapter for two neutral sentences per story, grounded only in the verified ledger facts. A live run over the T011 ledger produced five schema-valid summaries with 0 citation errors (every sentence cited a real fact id). The deterministic `check_citations` rejects uncited sentences and unknown ids. Outputs are `summaries.json` (schema-valid) and `summaries.md` (FR-011). Saved under `runs/t012-live/`.
 
+## T013 — Writer (2026-10-12)
+
+The `story` skill (`src/skills/story.py`) makes a single DeepSeek call that turns the five summaries into one fictional story. The model proposes only a title and six beat texts; code injects `schema_version`, the fiction label, the fixed cast (`courier`, `mayor`, `pigeon`), `beat_index`, `source_ref` and the closing `ending` flag, then validates the result against `schemas/story.schema.json`. The prompt forbids real names and forbids implying one real news story caused another (FR-005).
+
+A live run over the cached T012 summaries produced a schema-valid six-beat story with no validation errors. The model kept the fixed cast, avoided real names, and mapped beats 1-5 to sources 1-5 in order. One note for the T016 Verifier: because the source news included a school-related incident, the model's fiction set two beats at a school (a "guitar case popper" prank); nothing is graphic, but the school setting is something the Verifier and the final pick-5 safety screen should keep an eye on. The run is saved under `runs/t013-live/`.
+
 ## AniDoodle video spike - complete (2026-10-12)
 
 AniDoodle is selected as the immediate local, code-drawn video path. Its direct per-still/frame price and per-video price are both USD 0 because rendering is local and does not call a paid generation provider. Local CPU time, storage, and engineering time are not included in those unit prices. Audio is disabled; no TTS or music request has been made. Full integration notes and the runnable proof script are in `docs/anidoodle.md` and `scripts/anidoodle/render_gate0.mjs`.

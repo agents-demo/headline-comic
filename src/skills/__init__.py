@@ -23,16 +23,28 @@ from .article_text import (
     save_articles_document,
     story_request_from_candidate,
 )
+from .safety import (
+    DEFAULT_LIST_LIMIT,
+    SAFETY_TAGS,
+    classify,
+    default_view,
+    tag_candidate,
+    tag_candidates,
+)
 
 __all__ = [
     "ArticleText",
+    "DEFAULT_LIST_LIMIT",
     "FeedSpec",
     "RawItem",
+    "SAFETY_TAGS",
     "StoryRequest",
     "allowed_hosts_for",
     "build_articles_document",
     "build_candidates_document",
+    "classify",
     "cluster_items",
+    "default_view",
     "fetch_article_text",
     "fetch_feed",
     "fetch_news",
@@ -44,4 +56,6 @@ __all__ = [
     "save_articles_document",
     "save_candidates_document",
     "story_request_from_candidate",
+    "tag_candidate",
+    "tag_candidates",
 ]

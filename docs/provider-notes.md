@@ -39,6 +39,12 @@ The basic Search query was `top world news today`, with `topic=news`, `time_rang
 
 Tavily API references: [Extract](https://docs.tavily.com/documentation/api-reference/endpoint/extract), [Search](https://docs.tavily.com/documentation/api-reference/endpoint/search), [Credits & Pricing](https://docs.tavily.com/documentation/api-credits), [Pricing](https://www.tavily.com/pricing). Checked 2026-10-12.
 
+## T010 — Tavily Extract adapter + article_text skill (2026-10-12)
+
+The Extract adapter is confirmed against Tavily's Extract docs (checked 2026-10-12): `POST https://api.tavily.com/extract` with bearer auth, a batch of up to 20 URLs; response `results[]` `{url, raw_content}`, `failed_results[]` `{url, error}`, `response_time`, `request_id`, and `usage {credits}` only when `include_usage=true`. Basic depth bills 1 credit per 5 successful extractions (failed URLs are free); `format=text` returns plain text in `raw_content`.
+
+A live validation ran one basic Extract batch over the top-5 RSS candidates (3 Ynet, 1 BBC, 1 NPR). All five succeeded and the response reported `usage.credits = 1.0`, within the approved 1-credit limit. Word counts were 97, 203, 464, 1,243 and 1,253; `raw_content` includes page boilerplate/navigation, which the T011 ledger extraction must tolerate. The per-article fallback chain (Extract → feed description → pasted text) and text-source recording live in `src/skills/article_text.py`, with the adapter in `src/providers/tavily.py`. The feed path is live-validated; the pasted-URL and pasted-text paths are unit-tested only. The run is saved under `runs/t010-live/`.
+
 ## AniDoodle video spike - complete (2026-10-12)
 
 AniDoodle is selected as the immediate local, code-drawn video path. Its direct per-still/frame price and per-video price are both USD 0 because rendering is local and does not call a paid generation provider. Local CPU time, storage, and engineering time are not included in those unit prices. Audio is disabled; no TTS or music request has been made. Full integration notes and the runnable proof script are in `docs/anidoodle.md` and `scripts/anidoodle/render_gate0.mjs`.

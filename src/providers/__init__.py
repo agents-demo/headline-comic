@@ -12,15 +12,19 @@ from .contracts import (
     VideoResult,
 )
 from .anidoodle import AniDoodleVideoProvider
+from .tavily import ExtractResult, TavilyExtractError, TavilyExtractProvider
 
 __all__ = [
     "AniDoodleVideoProvider",
+    "ExtractResult",
     "ImageProvider",
     "ImageRequest",
     "ImageResult",
     "TTSProvider",
     "TTSRequest",
     "TTSResult",
+    "TavilyExtractError",
+    "TavilyExtractProvider",
     "VideoProvider",
     "VideoRequest",
     "VideoResult",

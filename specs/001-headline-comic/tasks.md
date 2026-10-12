@@ -35,7 +35,7 @@ Legend: `[A]` Track A (text, flow, UI). `[B]` Track B (visuals, video). `[AB]` b
 
 ## Phase 2 - Visuals and comic (Track B, Days 2-5) - 23 h
 
-- [ ] T021 [B] Style bible in `docs/style-bible.md`: clay/miniature look, palette, 3 characters, town set, prompt templates (3h)
+- [x] T021 [B] Style bible in `docs/style-bible.md`: clay/miniature look, palette, 3 characters, town set, prompt templates (3h) - `docs/style-bible.md` defines the miniature/clay-inspired flat-vector look (the honest AniDoodle render caveat is stated up front), the canonical palette (sky/ground/clay/window + per-character hexes), the three characters (Pip the courier pigeon, the courier, the mayor) with their distinguishing colour marks, the town set and its reusable props, and the scene-authoring templates — the character recipe signature, the bounded camera/action -> preset vocabulary that T023's `image_gen` maps deterministically, and the no-text-in-art / composited-on-copies rule (FR-009, FR-013, D1, D8, D10, SC-2).
 - [ ] T022 [B] One-off cast setup: generate four-view sheets for the 3 characters and the town reference, choose the best by hand, store in `assets/cast/` (FR-008) (4h)
 - [ ] T023 [B] [US4] Skill `image_gen`: one clean 16:9 keyframe per shot from the storyboard, with up to 3 references per call, in parallel, retries, budget guard hook (FR-009) (5h)
 - [ ] T024 [B] [US4] Skill `compose` (comic): 2 x 3 layout from the six panel keyframes, captions and speech bubbles in Pillow on copies, source markers 1-5, header and footer fiction label (FR-009, FR-013) (5h)

@@ -45,6 +45,12 @@ The Extract adapter is confirmed against Tavily's Extract docs (checked 2026-10-
 
 A live validation ran one basic Extract batch over the top-5 RSS candidates (3 Ynet, 1 BBC, 1 NPR). All five succeeded and the response reported `usage.credits = 1.0`, within the approved 1-credit limit. Word counts were 97, 203, 464, 1,243 and 1,253; `raw_content` includes page boilerplate/navigation, which the T011 ledger extraction must tolerate. The per-article fallback chain (Extract → feed description → pasted text) and text-source recording live in `src/skills/article_text.py`, with the adapter in `src/providers/tavily.py`. The feed path is live-validated; the pasted-URL and pasted-text paths are unit-tested only. The run is saved under `runs/t010-live/`.
 
+## T011 — DeepSeek chat adapter + article ledger (2026-10-12)
+
+The first real LLM provider is DeepSeek, exposed through its OpenAI-compatible chat completions endpoint. The adapter (`src/providers/llm.py`) reads `LLM_API_KEY`, `LLM_BASE_URL` and `LLM_MODEL` from `.env` via the encoding-tolerant loader in `src/env.py` (the `.env` is UTF-16 on Windows, which python-dotenv cannot parse; see `docs/api-notes.md`). Defaults are `https://api.deepseek.com` and `deepseek-chat`. Requests use `urllib` only and the host derived from `LLM_BASE_URL` is allowlisted per FR-014. `response_format: {"type": "json_object"}` is sent for JSON extraction calls.
+
+A live validation ran the `article_ledger` skill over the five cached T010 articles (no new Tavily spend): five parallel DeepSeek calls produced facts/quotes/people with verbatim support spans, every proposed span matched the article text after whitespace normalisation (0 dropped), and the resulting `ledger.json` validates against `schemas/ledger.schema.json`. Fact counts ranged 8-35 and quotes 0-6 per story; the model over-extracts on longer articles, which the deterministic span check tolerates and later stages will trim by citation. The run is saved under `runs/t011-live/`.
+
 ## AniDoodle video spike - complete (2026-10-12)
 
 AniDoodle is selected as the immediate local, code-drawn video path. Its direct per-still/frame price and per-video price are both USD 0 because rendering is local and does not call a paid generation provider. Local CPU time, storage, and engineering time are not included in those unit prices. Audio is disabled; no TTS or music request has been made. Full integration notes and the runnable proof script are in `docs/anidoodle.md` and `scripts/anidoodle/render_gate0.mjs`.

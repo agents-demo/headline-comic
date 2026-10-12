@@ -51,6 +51,10 @@ The first real LLM provider is DeepSeek, exposed through its OpenAI-compatible c
 
 A live validation ran the `article_ledger` skill over the five cached T010 articles (no new Tavily spend): five parallel DeepSeek calls produced facts/quotes/people with verbatim support spans, every proposed span matched the article text after whitespace normalisation (0 dropped), and the resulting `ledger.json` validates against `schemas/ledger.schema.json`. Fact counts ranged 8-35 and quotes 0-6 per story; the model over-extracts on longer articles, which the deterministic span check tolerates and later stages will trim by citation. The run is saved under `runs/t011-live/`.
 
+## T012 — summariser + citation checker (2026-10-12)
+
+The `summarise` skill reuses the DeepSeek adapter for two neutral sentences per story, grounded only in the verified ledger facts. A live run over the T011 ledger produced five schema-valid summaries with 0 citation errors (every sentence cited a real fact id). The deterministic `check_citations` rejects uncited sentences and unknown ids. Outputs are `summaries.json` (schema-valid) and `summaries.md` (FR-011). Saved under `runs/t012-live/`.
+
 ## AniDoodle video spike - complete (2026-10-12)
 
 AniDoodle is selected as the immediate local, code-drawn video path. Its direct per-still/frame price and per-video price are both USD 0 because rendering is local and does not call a paid generation provider. Local CPU time, storage, and engineering time are not included in those unit prices. Audio is disabled; no TTS or music request has been made. Full integration notes and the runnable proof script are in `docs/anidoodle.md` and `scripts/anidoodle/render_gate0.mjs`.

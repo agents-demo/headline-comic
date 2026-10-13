@@ -405,3 +405,57 @@ export function drawTown(ctx: Ctx) {
   ctx.closePath();
   ctx.fill();
 }
+
+// ---- story props (small, reusable, one per story beat) -----------------------
+// Each prop draws centred on (0,0); the caller translates and scales.
+
+export function drawLamp(ctx: Ctx) {
+  rect(ctx, -5, -70, 10, 120, INK); // post
+  ell(ctx, 0, -74, 16, 12, LAMP); // glowing head
+  dot(ctx, 0, -74, 7, "#fff3c4");
+}
+export function drawCanopy(ctx: Ctx) {
+  rect(ctx, -70, -60, 8, 130, INK); // left post
+  rect(ctx, 62, -60, 8, 130, INK); // right post
+  tri(ctx, [-80, -56], [80, -56], [46, -96], CANOPY); // awning
+  rect(ctx, -80, -100, 160, 44, CANOPY); // canopy top
+}
+export function drawFence(ctx: Ctx) {
+  rect(ctx, -80, -20, 160, 8, ROOF); // top rail
+  rect(ctx, -80, 26, 160, 8, ROOF); // bottom rail
+  for (let i = 0; i < 5; i++) {
+    rect(ctx, -80 + i * 40, -34, 8, 70, ROOF); // pickets
+  }
+}
+export function drawClock(ctx: Ctx) {
+  ell(ctx, 0, 0, 34, 34, WINDOW); // face
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(0, 0, 34, 0, Math.PI * 2);
+  ctx.stroke();
+  limb(ctx, 0, 0, 0, -20, 4, INK); // hands
+  limb(ctx, 0, 0, 14, -6, 4, INK);
+}
+export function drawMap(ctx: Ctx) {
+  // A top-down printed map: beige sheet, a winding river, a loop route.
+  rect(ctx, -160, -90, 320, 180, "#efe6cf");
+  ctx.strokeStyle = "#b9ac8c";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(-160, -90, 320, 180);
+  ctx.strokeStyle = "#8ec9dc";
+  ctx.lineWidth = 14;
+  ctx.beginPath();
+  ctx.moveTo(-160, 40);
+  ctx.quadraticCurveTo(-40, -20, 0, 0);
+  ctx.quadraticCurveTo(40, 20, 160, -30);
+  ctx.stroke();
+  ctx.strokeStyle = "#d07858";
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(-140, -40);
+  ctx.quadraticCurveTo(0, -70, 60, -30);
+  ctx.quadraticCurveTo(120, 10, 150, -60);
+  ctx.stroke();
+  ctx.lineWidth = 1;
+}

@@ -88,6 +88,14 @@ from .verifier import (
     run as run_verifier,
     save_verifier,
 )
+from .image_gen import (
+    build_image_requests,
+    generate_keyframes,
+    normalize_action,
+    normalize_camera,
+    scene_spec,
+    view_for,
+)
 
 __all__ = [
     "ArticleText",
@@ -107,6 +115,7 @@ __all__ = [
     "VERIFIER_MODEL",
     "allowed_hosts_for",
     "build_articles_document",
+    "build_image_requests",
     "build_candidates_document",
     "build_checks_document",
     "build_ledger_document",
@@ -127,9 +136,12 @@ __all__ = [
     "fetch_article_text",
     "fetch_feed",
     "fetch_news",
+    "generate_keyframes",
     "ledger_names",
     "ledger_source_from",
     "load_feeds",
+    "normalize_action",
+    "normalize_camera",
     "normalize_title",
     "normalize_whitespace",
     "parse_feed",
@@ -151,6 +163,7 @@ __all__ = [
     "save_storyboard",
     "save_summaries_document",
     "save_verifier",
+    "scene_spec",
     "sources_from_ledger",
     "span_check",
     "story_request_from_candidate",
@@ -159,4 +172,5 @@ __all__ = [
     "tag_candidates",
     "validate_story",
     "validate_storyboard",
+    "view_for",
 ]

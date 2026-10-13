@@ -154,7 +154,7 @@ class GenerateKeyframesTests(unittest.TestCase):
     def _cost(self, run_id: str) -> dict:
         return json.loads((self.root / "runs" / run_id / "cost.json").read_text(encoding="utf-8"))
 
-    def test_zero_cost_path_records_and_settles(self) -> None:
+    def test_zero_cost_path_records_without_settling(self) -> None:
         provider = _FakeProvider()
         results = generate_keyframes(
             STORYBOARD,
@@ -167,10 +167,28 @@ class GenerateKeyframesTests(unittest.TestCase):
         for result in results:
             self.assertTrue(result.image_path.is_file())
         cost = self._cost("t023-zero")
-        self.assertTrue(cost["settled"])
+        # settlement is deferred to the end of the media phase, so a later video
+        # stage can still record against the same run quote
+        self.assertFalse(cost["settled"])
         self.assertEqual(cost["run_actual_usd"], 0.0)
         item = next(i for i in cost["items"] if i["category"] == "image")
         self.assertEqual(item["actual_usd"], 0.0)
+
+    def test_combined_quote_reserves_image_and_video(self) -> None:
+        provider = _FakeProvider()
+        generate_keyframes(
+            STORYBOARD,
+            provider=provider,
+            workspace_root=self.root,
+            run_id="t023-combined",
+            unit_prices={
+                "image": UnitPrice.create("anidoodle", "keyframe", "0"),
+                "video": UnitPrice.create("anidoodle", "shot", "0"),
+            },
+            planned_categories=("image", "video"),
+        )
+        cost = self._cost("t023-combined")
+        self.assertEqual(sorted(i["category"] for i in cost["items"]), ["image", "video"])
 
     def test_retries_then_succeeds(self) -> None:
         provider = _FakeProvider(fail_times=1)

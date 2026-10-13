@@ -1,6 +1,7 @@
 """Focused tests for the AniDoodle adapter without launching a renderer."""
 
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -11,18 +12,32 @@ from src.providers import AniDoodleVideoProvider, VideoProvider, VideoRequest
 
 class AniDoodleVideoProviderTests(unittest.TestCase):
     def make_provider(self, root: Path) -> AniDoodleVideoProvider:
-        script = root / "scripts" / "anidoodle" / "render_gate0.mjs"
-        script.parent.mkdir(parents=True)
+        script = root / "scripts" / "anidoodle" / "render_video.mjs"
+        script.parent.mkdir(parents=True, exist_ok=True)
         script.write_text("// test fixture", encoding="utf-8")
-        return AniDoodleVideoProvider(root)
+        renderer = root / "anidoodle" / "skills" / "anidoodle" / "engine" / "tools" / "render.mjs"
+        renderer.parent.mkdir(parents=True, exist_ok=True)
+        renderer.write_text("// test fixture", encoding="utf-8")
+        return AniDoodleVideoProvider(root, anidoodle_home=root / "anidoodle")
 
     def make_artifacts(self, root: Path, run_id: str, *, duration: float = 8, audio: str = "none") -> None:
         run_dir = root / "runs" / run_id
         run_dir.mkdir(parents=True)
-        (run_dir / "anidoodle-pip.mp4").write_bytes(b"fixture mp4")
+        (run_dir / "video.mp4").write_bytes(b"fixture mp4")
         (run_dir / "manifest.json").write_text(
             json.dumps({"durationSeconds": duration, "audio": audio}), encoding="utf-8"
         )
+
+    def test_ffmpeg_bin_dir_is_discovered_from_vendored_tools(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            provider = self.make_provider(root)
+            self.assertIsNone(provider._ffmpeg_bin_dir())
+            ffmpeg_name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
+            bin_dir = root / "runs" / "_tools" / "ffmpeg" / "ffmpeg-1.0" / "bin"
+            bin_dir.mkdir(parents=True)
+            (bin_dir / ffmpeg_name).write_bytes(b"ffmpeg")
+            self.assertEqual(provider._ffmpeg_bin_dir(), bin_dir.resolve())
 
     def test_adapter_implements_provider_contract_and_returns_validated_result(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -34,7 +49,7 @@ class AniDoodleVideoProviderTests(unittest.TestCase):
                 result = provider.render(VideoRequest("demo", max_duration_s=10))
 
             self.assertIsInstance(provider, VideoProvider)
-            self.assertEqual(result.video_path, root.resolve() / "runs" / "demo" / "anidoodle-pip.mp4")
+            self.assertEqual(result.video_path, root.resolve() / "runs" / "demo" / "video.mp4")
             self.assertEqual(result.manifest_path, root.resolve() / "runs" / "demo" / "manifest.json")
             self.assertEqual(result.duration_s, 8)
             self.assertFalse(result.has_audio)

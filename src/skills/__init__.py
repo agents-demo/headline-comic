@@ -118,6 +118,14 @@ from .character_check import (
     run as run_character_check,
     score_deck,
 )
+from .video_gen import (
+    MAX_DURATION_S,
+    VideoGenError,
+    run as run_video_gen,
+    serialize_video_scenes,
+    total_duration_s,
+    video_specs,
+)
 
 __all__ = [
     "AI_GENERATED_MARK",
@@ -131,6 +139,7 @@ __all__ = [
     "FICTION_LABEL",
     "FeedSpec",
     "LedgerSource",
+    "MAX_DURATION_S",
     "MAX_SHOTS",
     "MIN_SHOTS",
     "RawItem",
@@ -140,6 +149,7 @@ __all__ = [
     "StoryRequest",
     "StoryboardError",
     "VERIFIER_MODEL",
+    "VideoGenError",
     "allowed_hosts_for",
     "build_articles_document",
     "build_deck",
@@ -193,6 +203,7 @@ __all__ = [
     "run_facts",
     "run_summariser",
     "run_verifier",
+    "run_video_gen",
     "run_writer",
     "save_articles_document",
     "save_candidates_document",
@@ -204,13 +215,16 @@ __all__ = [
     "save_verifier",
     "scene_spec",
     "score_deck",
+    "serialize_video_scenes",
     "sources_from_ledger",
     "span_check",
     "story_request_from_candidate",
     "summarise",
     "tag_candidate",
     "tag_candidates",
+    "total_duration_s",
     "validate_story",
     "validate_storyboard",
+    "video_specs",
     "view_for",
 ]

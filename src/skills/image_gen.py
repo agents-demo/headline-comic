@@ -31,7 +31,6 @@ from src.permissions.media_guard import (
     prepare_storyboard_quote,
     record_actual_cost,
     require_allowed_write_path,
-    settle_run_cost,
 )
 from src.providers.contracts import ImageRequest, ImageResult
 
@@ -233,6 +232,7 @@ def generate_keyframes(
     output_dir: Path | None = None,
     max_attempts: int = 2,
     approval_path: Path | None = None,
+    planned_categories: Sequence[str] = ("image",),
 ) -> list[ImageResult]:
     """Generate one keyframe per shot, budgeted and guarded.
 
@@ -241,6 +241,11 @@ def generate_keyframes(
     additionally requires an approval record for the run; the local AniDoodle
     path is $0 and skips that paid-only requirement. Outputs stay under
     ``runs/<run-id>/``.
+
+    ``planned_categories`` names every media category this run will call, so a
+    single cost reservation covers them all (pass ``("image", "video")`` when the
+    video stage follows). Settlement is left to the end of the media phase, so a
+    later video/TTS stage can still record against the same run quote.
     """
     root = workspace_root.resolve()
     cast_dir = (cast_dir or root / "assets" / "cast").resolve()
@@ -256,7 +261,7 @@ def generate_keyframes(
         unit_prices,
         workspace_root=root,
         run_id=run_id,
-        planned_categories=["image"],
+        planned_categories=planned_categories,
     )
     if image_price.usd_per_unit > 0:
         if approval_path is None:
@@ -268,5 +273,4 @@ def generate_keyframes(
 
     actual = image_price.usd_per_unit * len(requests)
     record_actual_cost(workspace_root=root, run_id=run_id, category="image", actual_usd=actual)
-    settle_run_cost(workspace_root=root, run_id=run_id)
     return results

@@ -90,10 +90,20 @@ class FallbackFilterTests(unittest.TestCase):
     def test_zoom_in_filter(self) -> None:
         vf = fallback_filter(5.0, "zoom")
         self.assertIn("scale=2560:1440", vf)
-        self.assertIn("min(zoom+0.0015,1.4)", vf)
+        self.assertIn("min(1+(0.0015*on),1.4)", vf)
         self.assertIn("d=120", vf)
         self.assertIn("s=1280x720", vf)
         self.assertIn("fps=24", vf)
+        self.assertIn("1280-(iw/zoom/2)", vf)  # default focal = frame centre (2x)
+
+    def test_zoom_out_filter(self) -> None:
+        vf = fallback_filter(5.0, "zoom", direction="out")
+        self.assertIn("max(1.4-(0.0015*on),1)", vf)
+
+    def test_focal_zoom_centres_on_characters(self) -> None:
+        vf = fallback_filter(5.0, "zoom", fx=480.0, fy=470.0)
+        self.assertIn("960-(iw/zoom/2)", vf)  # 480 * 2
+        self.assertIn("940-(ih/zoom/2)", vf)  # 470 * 2
 
     def test_overhead_pan_filter(self) -> None:
         vf = fallback_filter(6.0, "overhead")
@@ -108,7 +118,10 @@ class FallbackShotsCommandTests(unittest.TestCase):
             "ffmpeg",
             [Path("k1.png"), Path("k2.png")],
             [5.0, 6.0],
-            ["zoom", "overhead"],
+            [
+                {"mode": "zoom", "fx": 480.0, "fy": 470.0, "direction": "in"},
+                {"mode": "overhead"},
+            ],
             Path("out.mp4"),
         )
         self.assertEqual(args[0], "ffmpeg")

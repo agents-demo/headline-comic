@@ -5,7 +5,9 @@ without a video (FR-017, D6). It is the *same* finished cut as the generated vid
 title card, per-shot footage, crossfades, subtitles, narration, music bed, closing
 card and the persistent "AI-generated fiction" mark — but the silent footage comes
 from the still keyframes instead of the AniDoodle render: each shot is a slow Ken
-Burns zoom-in over its keyframe (a horizontal pan for the overhead map shot), driven
+Burns pan/zoom over its keyframe (a horizontal pan for the overhead map shot) that is
+centred on the shot's character focal point rather than the frame centre, and the zoom
+direction alternates in/out so consecutive shots do not all move the same way, driven
 by ffmpeg ``zoompan`` (pan and zoom only, no parallax or sprites). Everything after
 the silent shots — holds, transitions, subtitles, audio, cards, metadata — is
 delegated to the assembler (T029), so the fallback and the generated video can never
@@ -20,7 +22,7 @@ from typing import Any, Callable, Mapping, Sequence
 
 from src.permissions.media_guard import require_allowed_write_path
 from src.skills.assemble import FPS, VIDEO_H, VIDEO_W, _find_tool, run as run_assembler
-from src.skills.image_gen import scene_spec
+from src.skills.image_gen import H as KEYFRAME_H, W as KEYFRAME_W, scene_spec
 
 # Slow, deterministic pan-and-zoom parameters (pan and zoom only, D6).
 ZOOM_STEP = 0.0015  # zoom-in per output frame
@@ -39,17 +41,38 @@ def fallback_frames(duration_s: float) -> int:
     return max(1, round(float(duration_s) * FPS))
 
 
-def fallback_filter(duration_s: float, camera_mode: str) -> str:
-    """The zoompan filter chain for one shot: a slow zoom-in, or a pan for overhead."""
+def fallback_filter(
+    duration_s: float,
+    camera_mode: str,
+    *,
+    fx: float | None = None,
+    fy: float | None = None,
+    direction: str = "in",
+) -> str:
+    """The zoompan filter chain for one shot: a focal zoom-in/out, or a pan for overhead.
+
+    Zoom shots centre the ``zoompan`` window on the shot's character focal point
+    ``(fx, fy)`` (in 1280x720 keyframe space, from ``image_gen.scene_spec``) instead of
+    the frame centre, and ``direction`` picks a zoom-in (``"in"``) or zoom-out
+    (``"out"``). The overhead map keeps its horizontal pan. Pan and zoom only (D6).
+    """
     frames = fallback_frames(duration_s)
     if camera_mode == "overhead":
         zoom = f"{PAN_ZOOM:g}"
         x = f"(iw-iw/zoom)*on/{frames}"
         y = "ih/2-(ih/zoom/2)"
     else:
-        zoom = f"min(zoom+{ZOOM_STEP:g},{ZOOM_MAX:g})"
-        x = "iw/2-(iw/zoom/2)"
-        y = "ih/2-(ih/zoom/2)"
+        # Scale the keyframe-space focal point to the 2x-upscaled zoompan input.
+        focal_x = (KEYFRAME_W / 2 if fx is None else float(fx)) * (UPSCALE_W / KEYFRAME_W)
+        focal_y = (KEYFRAME_H / 2 if fy is None else float(fy)) * (UPSCALE_H / KEYFRAME_H)
+        if direction == "out":
+            zoom = f"max({ZOOM_MAX:g}-({ZOOM_STEP:g}*on),1)"
+        else:
+            zoom = f"min(1+({ZOOM_STEP:g}*on),{ZOOM_MAX:g})"
+        # Window left/top edge such that its centre stays on the focal point; zoompan
+        # clamps to the full frame at zoom == 1 (x/y land in [0, iw-iw/zoom]).
+        x = f"{focal_x:g}-(iw/zoom/2)"
+        y = f"{focal_y:g}-(ih/zoom/2)"
     return (
         f"scale={UPSCALE_W}:{UPSCALE_H},"
         f"zoompan=z='{zoom}':x='{x}':y='{y}':d={frames}:s={VIDEO_W}x{VIDEO_H}:fps={FPS},"
@@ -61,17 +84,25 @@ def fallback_shots_command(
     ffmpeg: str,
     keyframes: Sequence[Path],
     durations: Sequence[float],
-    modes: Sequence[str],
+    motions: Sequence[Mapping[str, Any]],
     output: Path,
 ) -> list[str]:
-    """One ffmpeg command that pans/zooms every keyframe and concatenates the shots."""
+    """One ffmpeg command that pans/zooms every keyframe and concatenates the shots.
+
+    ``motions`` carries one mapping per shot with ``mode`` (``"zoom"``/``"overhead"``),
+    the optional focal point ``fx``/``fy`` and ``direction`` (``"in"``/``"out"``).
+    """
     cmd = [ffmpeg, "-y"]
     for keyframe in keyframes:
         cmd += ["-i", str(keyframe)]
     filters: list[str] = []
     labels: list[str] = []
-    for i, (duration, mode) in enumerate(zip(durations, modes)):
-        filters.append(f"[{i}:v]{fallback_filter(duration, mode)}[v{i}]")
+    for i, (duration, motion) in enumerate(zip(durations, motions)):
+        filters.append(
+            f"[{i}:v]"
+            f"{fallback_filter(duration, str(motion.get('mode') or 'zoom'), fx=motion.get('fx'), fy=motion.get('fy'), direction=str(motion.get('direction') or 'in'))}"
+            f"[v{i}]"
+        )
         labels.append(f"[v{i}]")
     filters.append(
         f"{''.join(labels)}concat=n={len(keyframes)}:v=1:a=0[vout]"
@@ -101,8 +132,8 @@ def render_fallback_shots(
 
     keyframes: list[Path] = []
     durations: list[float] = []
-    modes: list[str] = []
-    for shot in shots:
+    motions: list[dict[str, Any]] = []
+    for index, shot in enumerate(shots):
         if not isinstance(shot, Mapping):
             raise FallbackError("storyboard shot must be an object")
         shot_id = str(shot.get("shot_id") or "").strip()
@@ -113,13 +144,20 @@ def render_fallback_shots(
             raise FallbackError(f"keyframe missing for {shot_id}: {keyframe}")
         keyframes.append(keyframe)
         durations.append(float(shot.get("duration_s") or 0))
-        camera = scene_spec(shot).get("camera")
-        modes.append(str((camera or {}).get("mode") or "zoom"))
+        camera = scene_spec(shot).get("camera") or {}
+        mode = str(camera.get("mode") or "zoom")
+        motion: dict[str, Any] = {"mode": mode}
+        if mode != "overhead":
+            motion["fx"] = camera.get("fx")
+            motion["fy"] = camera.get("fy")
+            # Alternate zoom direction so consecutive shots do not all push in.
+            motion["direction"] = "out" if index % 2 else "in"
+        motions.append(motion)
 
     ffmpeg = ffmpeg or _find_tool(repo_root, "ffmpeg")
     output.parent.mkdir(parents=True, exist_ok=True)
     proc = run(
-        fallback_shots_command(ffmpeg, keyframes, durations, modes, output),
+        fallback_shots_command(ffmpeg, keyframes, durations, motions, output),
         capture_output=True,
         text=True,
     )

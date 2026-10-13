@@ -70,6 +70,9 @@ class PageSizeTests(unittest.TestCase):
         panel_h = int(panel_w * 9 / 16)
         expected_h = MARGIN + HEADER_H + ROWS * panel_h + (ROWS - 1) * GUTTER + FOOTER_H + MARGIN
         self.assertEqual(page_size(), (PAGE_W, expected_h))
+        # HEADER_H is the 112px page header; the facts-strip header is a separate
+        # constant (STRIP_HEADER_H) and must not shadow it. Pin the real value.
+        self.assertEqual(page_size(), (1280, 1298))
 
 
 class ComposeComicTests(unittest.TestCase):

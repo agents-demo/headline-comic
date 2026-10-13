@@ -9,8 +9,11 @@ from PIL import Image
 
 from src.skills.character_check import (
     CAST_NAMES,
+    SIGNATURE_COLOURS,
     CharacterCheckError,
     build_deck,
+    check_cast_sheet,
+    check_signature_colours,
     deck_items,
     run,
     score_deck,
@@ -137,6 +140,58 @@ class ScoreDeckTests(unittest.TestCase):
         labels[first] = ["superhero"]
         with self.assertRaises(CharacterCheckError):
             score_deck(self.deck, labels)
+
+
+class SignatureColourTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._temp = tempfile.TemporaryDirectory()
+        self.root = Path(self._temp.name)
+
+    def tearDown(self) -> None:
+        self._temp.cleanup()
+
+    def _sheet(self, colours, name="sheet.png") -> Path:
+        image = Image.new("RGB", (40, 24), (255, 255, 255))
+        for index, colour in enumerate(colours):
+            for x in range(index * 8, index * 8 + 6):
+                for y in range(4, 18):
+                    image.putpixel((x, y), colour)
+        path = self.root / name
+        image.save(path)
+        return path
+
+    def test_present_colours_are_detected(self) -> None:
+        sheet = self._sheet([(46, 111, 149), (244, 201, 93)])
+        self.assertEqual(
+            check_signature_colours(sheet, [(46, 111, 149), (244, 201, 93), (192, 57, 43)]),
+            [(46, 111, 149), (244, 201, 93)],
+        )
+
+    def test_tolerance_matches_antialiased_fill(self) -> None:
+        sheet = self._sheet([(49, 115, 152)])  # within tolerance 8 of courier cap #2e6f95
+        self.assertIn((46, 111, 149), check_signature_colours(sheet, [(46, 111, 149)]))
+
+    def test_every_cast_member_has_unique_and_shared_marks(self) -> None:
+        self.assertEqual(sorted(SIGNATURE_COLOURS), list(CAST_NAMES))
+        # a colour unique to each character must be present in its own set
+        unique = {"courier": (46, 111, 149), "mayor": (192, 57, 43), "pigeon": (51, 71, 91)}
+        for name, colour in unique.items():
+            self.assertIn(colour, SIGNATURE_COLOURS[name])
+
+    def test_check_cast_sheet_ok_and_missing(self) -> None:
+        sheet = self._sheet(SIGNATURE_COLOURS["mayor"], name="mayor.png")
+        result = check_cast_sheet(sheet, "mayor")
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["missing"], [])
+
+        bare = self._sheet([(46, 111, 149)], name="bare.png")
+        missing = check_cast_sheet(bare, "mayor")
+        self.assertFalse(missing["ok"])
+        self.assertIn((192, 57, 43), missing["missing"])
+
+    def test_unknown_character_fails_closed(self) -> None:
+        with self.assertRaises(CharacterCheckError):
+            check_cast_sheet(self.root / "x.png", "superhero")
 
 
 class RunTests(unittest.TestCase):

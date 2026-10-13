@@ -307,7 +307,7 @@ def run(
 STRIP_W = 640
 CARD_PAD_X = 24
 CARD_GAP = 18
-HEADER_H = 76
+STRIP_HEADER_H = 76
 
 
 def facts_cards(
@@ -366,7 +366,7 @@ def render_facts_strip(cards: Sequence[Mapping[str, object]], *, output_path: Pa
     content_w = STRIP_W - 2 * CARD_PAD_X
 
     layouts: list[dict] = []
-    height = HEADER_H
+    height = STRIP_HEADER_H
     for card in cards:
         title_lines = _fit(measurer, str(card.get("title") or ""), title_font, content_w, 2)
         body_lines = _wrap(measurer, str(card.get("summary") or ""), body_font, content_w)
@@ -403,7 +403,7 @@ def render_facts_strip(cards: Sequence[Mapping[str, object]], *, output_path: Pa
     draw.text((STRIP_W / 2, 18), f"Based on: {len(cards)} sources", font=_font(24, bold=True), fill=_INK, anchor="ma")
     draw.text((STRIP_W / 2, 52), "Today's news — the five stories behind the comic", font=_font(15), fill=_INK_SOFT, anchor="ma")
 
-    y = HEADER_H
+    y = STRIP_HEADER_H
     for layout in layouts:
         card = layout["card"]
         source = int(card.get("source") or 0)

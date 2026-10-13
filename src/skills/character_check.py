@@ -27,11 +27,33 @@ import shutil
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from PIL import Image
+
 from src.permissions.media_guard import require_allowed_write_path
 
 CAST_NAMES = ("courier", "mayor", "pigeon")
 PANEL_TARGET = 0.9
 FRAME_TARGET = 0.8
+
+def _rgb(hex_s: str) -> tuple[int, int, int]:
+    value = hex_s.lstrip("#")
+    return (int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16))
+
+
+# Each character's distinguishing marks (docs/style-bible.md section 2, cast.ts).
+# These are checked on the cast sheets — a single character on a controlled
+# backdrop — where a tolerant colour match is reliable. They anchor "characters
+# recognisable": the keyframe/comic renderer (scripts/anidoodle) draws each
+# character with these exact fills from the same cast.ts, so the marks the
+# sheets prove are the marks the comic shows. (The gold #f4c95d is shared by
+# courier band / pigeon beak / mayor medal; that is fine per-sheet and is why
+# each character also carries a colour unique to it: courier cap blue, mayor
+# sash red, pigeon body blue.)
+SIGNATURE_COLOURS: dict[str, list[tuple[int, int, int]]] = {
+    "courier": [_rgb("#2e6f95"), _rgb("#f4c95d"), _rgb("#3f6f8f"), _rgb("#8a5a2b")],
+    "mayor": [_rgb("#c0392b"), _rgb("#f2e3c6")],
+    "pigeon": [_rgb("#33475b"), _rgb("#d8e5e8"), _rgb("#f4c95d")],
+}
 
 
 class CharacterCheckError(RuntimeError):
@@ -41,6 +63,52 @@ class CharacterCheckError(RuntimeError):
 def _seed_from(run_id: str) -> int:
     digest = hashlib.sha256(run_id.encode("utf-8")).digest()
     return int.from_bytes(digest[:4], "big")
+
+
+def _colour_present(pixels: bytes, colour: tuple[int, int, int], tolerance: int) -> bool:
+    tr, tg, tb = colour
+    for i in range(0, len(pixels), 3):
+        if (
+            abs(pixels[i] - tr) <= tolerance
+            and abs(pixels[i + 1] - tg) <= tolerance
+            and abs(pixels[i + 2] - tb) <= tolerance
+        ):
+            return True
+    return False
+
+
+def check_signature_colours(
+    image_path: Path,
+    colours: Sequence[tuple[int, int, int]],
+    *,
+    tolerance: int = 8,
+) -> list[tuple[int, int, int]]:
+    """Return the subset of ``colours`` actually present in ``image_path``."""
+    with Image.open(image_path) as image:
+        pixels = image.convert("RGB").tobytes()
+    return [colour for colour in colours if _colour_present(pixels, colour, tolerance)]
+
+
+def check_cast_sheet(sheet_path: Path, character: str, *, tolerance: int = 8) -> dict:
+    """SC-2 recognisability anchor: does a cast sheet carry every signature colour?
+
+    Returns ``{"character", "expected", "present", "missing", "ok"}``. The check
+    is deliberately per-sheet: a single character on a controlled backdrop makes
+    a tolerant colour match reliable, unlike a full scene where props and the
+    town palette overlap the marks (the blue canopy shares the courier's cap
+    blue, the gold lamp shares the pigeon's beak).
+    """
+    if character not in SIGNATURE_COLOURS:
+        raise CharacterCheckError(f"unknown cast member: {character}")
+    expected = list(SIGNATURE_COLOURS[character])
+    present = check_signature_colours(sheet_path, expected, tolerance=tolerance)
+    return {
+        "character": character,
+        "expected": expected,
+        "present": present,
+        "missing": [colour for colour in expected if colour not in present],
+        "ok": len(present) == len(expected),
+    }
 
 
 def deck_items(storyboard: Mapping[str, Any], keyframes_dir: Path) -> list[dict]:

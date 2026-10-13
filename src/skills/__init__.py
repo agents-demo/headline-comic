@@ -104,11 +104,21 @@ from .compose import (
     panel_shots,
     run as run_composer,
 )
+from .character_check import (
+    CAST_NAMES,
+    CharacterCheckError,
+    build_deck,
+    deck_items,
+    run as run_character_check,
+    score_deck,
+)
 
 __all__ = [
     "AI_GENERATED_MARK",
     "ArticleText",
+    "CAST_NAMES",
     "Check",
+    "CharacterCheckError",
     "ComposeError",
     "DEFAULT_CAST",
     "DEFAULT_LIST_LIMIT",
@@ -125,6 +135,7 @@ __all__ = [
     "VERIFIER_MODEL",
     "allowed_hosts_for",
     "build_articles_document",
+    "build_deck",
     "build_image_requests",
     "build_candidates_document",
     "build_checks_document",
@@ -142,6 +153,7 @@ __all__ = [
     "classify",
     "cluster_items",
     "compose_comic",
+    "deck_items",
     "default_view",
     "extract_ledgers",
     "fetch_article_text",
@@ -164,6 +176,7 @@ __all__ = [
     "run_article_text",
     "run_checks",
     "run_checks_skill",
+    "run_character_check",
     "run_composer",
     "run_director",
     "run_summariser",
@@ -178,6 +191,7 @@ __all__ = [
     "save_summaries_document",
     "save_verifier",
     "scene_spec",
+    "score_deck",
     "sources_from_ledger",
     "span_check",
     "story_request_from_candidate",

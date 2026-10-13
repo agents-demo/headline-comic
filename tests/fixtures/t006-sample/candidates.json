@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-10-10T14:00:00Z",
+  "candidates": [
+    {
+      "candidate_id": "story-1",
+      "title": "Harbor path gains three solar lamps",
+      "url": "https://news.example.test/harbor-lights",
+      "publisher": "Example Wire",
+      "published_at": "2026-10-10T09:00:00Z",
+      "description": "A volunteer group installed three solar lamps along the harbor path.",
+      "source": "rss",
+      "cluster_id": "cl-0",
+      "safety_tags": [],
+      "hidden_by_safety": false
+    },
+    {
+      "candidate_id": "story-2",
+      "title": "Library posts accessible river-walk map",
+      "url": "https://news.example.test/library-map",
+      "publisher": "Example Wire",
+      "published_at": "2026-10-10T10:00:00Z",
+      "description": "The public library added a printed walking map to its notice board.",
+      "source": "rss",
+      "cluster_id": "cl-1",
+      "safety_tags": [],
+      "hidden_by_safety": false
+    },
+    {
+      "candidate_id": "story-3",
+      "title": "Market vendors raise a blue canopy",
+      "url": "https://news.example.test/market-canopy",
+      "publisher": "Example Wire",
+      "published_at": "2026-10-10T11:00:00Z",
+      "description": "Market vendors put up a blue canopy for Saturday's outdoor stalls.",
+      "source": "rss",
+      "cluster_id": "cl-2",
+      "safety_tags": [],
+      "hidden_by_safety": false
+    },
+    {
+      "candidate_id": "story-4",
+      "title": "Garden shares native flower seeds",
+      "url": "https://news.example.test/garden-seeds",
+      "publisher": "Example Wire",
+      "published_at": "2026-10-10T12:00:00Z",
+      "description": "A neighborhood garden shared packets of native flower seeds.",
+      "source": "rss",
+      "cluster_id": "cl-3",
+      "safety_tags": [],
+      "hidden_by_safety": false
+    },
+    {
+      "candidate_id": "story-5",
+      "title": "Clock workshop reopens with new benches",
+      "url": "https://news.example.test/clock-repair",
+      "publisher": "Example Wire",
+      "published_at": "2026-10-10T13:00:00Z",
+      "description": "A repair shop reopened its clock workshop after replacing two workbenches.",
+      "source": "rss",
+      "cluster_id": "cl-4",
+      "safety_tags": [],
+      "hidden_by_safety": false
+    }
+  ]
+}

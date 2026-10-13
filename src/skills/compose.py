@@ -300,3 +300,152 @@ def run(
         output_path=output_path,
         panels_dir=run_dir / "panels",
     )
+
+
+# --- facts strip (T026): five source-linked factual cards ----------------------
+
+STRIP_W = 640
+CARD_PAD_X = 24
+CARD_GAP = 18
+HEADER_H = 76
+
+
+def facts_cards(
+    summaries: Mapping[str, object],
+    candidates: Mapping[str, object],
+    *,
+    ledger: Mapping[str, object] | None = None,
+) -> list[dict]:
+    """Pair each candidate (in rank order) with its two-sentence summary.
+
+    The cards are numbered ``source 1-5`` in candidate order, matching the
+    storyboard's ``source_ref`` markers. Title and link come from the candidate;
+    the two-sentence summary comes from the matching summaries entry; the link
+    falls back to the ledger story URL when the candidate lacks one.
+    """
+    summary_by_id = {
+        str(summary.get("story_id") or ""): summary
+        for summary in (summaries.get("summaries") or [])
+        if isinstance(summary, Mapping)
+    }
+    ledger_by_id = {
+        str(story.get("story_id") or ""): story
+        for story in (ledger.get("stories") or [])
+        if isinstance(story, Mapping)
+    } if ledger is not None else {}
+    raw_candidates = candidates.get("candidates")
+    if not isinstance(raw_candidates, list):
+        raise ComposeError("candidates must contain a candidates array")
+    cards: list[dict] = []
+    for index, candidate in enumerate(raw_candidates, start=1):
+        if not isinstance(candidate, Mapping):
+            raise ComposeError("candidate must be an object")
+        candidate_id = str(candidate.get("candidate_id") or "")
+        summary = summary_by_id.get(candidate_id)
+        sentences = [str(s.get("text") or "") for s in (summary.get("sentences") or []) if isinstance(s, Mapping)]
+        url = str(candidate.get("url") or "") or str(ledger_by_id.get(candidate_id, {}).get("url") or "")
+        cards.append(
+            {
+                "source": index,
+                "title": str(candidate.get("title") or "").strip(),
+                "summary": " ".join(sentences).strip(),
+                "link": url.strip(),
+            }
+        )
+    return cards
+
+
+def render_facts_strip(cards: Sequence[Mapping[str, object]], *, output_path: Path) -> Path:
+    """Render the five fact cards as a vertical strip (title + summary + link)."""
+    if not cards:
+        raise ComposeError("facts strip needs at least one card")
+    measurer = ImageDraw.Draw(Image.new("RGB", (10, 10)))
+    title_font = _font(22, bold=True)
+    body_font = _font(18)
+    link_font = _font(14)
+    content_w = STRIP_W - 2 * CARD_PAD_X
+
+    layouts: list[dict] = []
+    height = HEADER_H
+    for card in cards:
+        title_lines = _fit(measurer, str(card.get("title") or ""), title_font, content_w, 2)
+        body_lines = _wrap(measurer, str(card.get("summary") or ""), body_font, content_w)
+        link_lines = _fit(measurer, str(card.get("link") or ""), link_font, content_w, 2)
+        title_lh = title_font.size + 4
+        body_lh = body_font.size + 4
+        link_lh = link_font.size + 2
+        card_h = (
+            12
+            + title_lh * len(title_lines)
+            + 6
+            + body_lh * len(body_lines)
+            + 6
+            + link_lh * len(link_lines)
+            + 14
+        )
+        layouts.append(
+            {
+                "card": card,
+                "title_lines": title_lines,
+                "body_lines": body_lines,
+                "link_lines": link_lines,
+                "title_lh": title_lh,
+                "body_lh": body_lh,
+                "link_lh": link_lh,
+                "h": card_h,
+            }
+        )
+        height += card_h + CARD_GAP
+    height += 8
+
+    image = Image.new("RGB", (STRIP_W, height), _PAPER)
+    draw = ImageDraw.Draw(image)
+    draw.text((STRIP_W / 2, 18), f"Based on: {len(cards)} sources", font=_font(24, bold=True), fill=_INK, anchor="ma")
+    draw.text((STRIP_W / 2, 52), "Today's news — the five stories behind the comic", font=_font(15), fill=_INK_SOFT, anchor="ma")
+
+    y = HEADER_H
+    for layout in layouts:
+        card = layout["card"]
+        source = int(card.get("source") or 0)
+        draw.line([(CARD_PAD_X, y - 6), (STRIP_W - CARD_PAD_X, y - 6)], fill=_INK_SOFT, width=1)
+        # source chip
+        label = f"source {source}" if source else "source"
+        pad = 8
+        text_w = int(draw.textlength(label, font=link_font))
+        chip_w = text_w + 2 * pad
+        chip_h = link_font.size + 8
+        draw.rounded_rectangle([CARD_PAD_X, y, CARD_PAD_X + chip_w, y + chip_h], radius=5, fill=_INK)
+        draw.text((CARD_PAD_X + pad, y + 4), label, font=link_font, fill=_WHITE)
+        ty = y + chip_h + 10
+        for line in layout["title_lines"]:
+            draw.text((CARD_PAD_X, ty), line, font=title_font, fill=_INK)
+            ty += layout["title_lh"]
+        ty += 4
+        for line in layout["body_lines"]:
+            draw.text((CARD_PAD_X, ty), line, font=body_font, fill=_INK)
+            ty += layout["body_lh"]
+        ty += 4
+        for line in layout["link_lines"]:
+            draw.text((CARD_PAD_X, ty), line, font=link_font, fill=_INK_SOFT)
+            ty += layout["link_lh"]
+        y += layout["h"] + CARD_GAP
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(output_path)
+    return output_path
+
+
+def run_facts(
+    summaries: Mapping[str, object],
+    candidates: Mapping[str, object],
+    *,
+    workspace_root: Path,
+    run_id: str,
+    ledger: Mapping[str, object] | None = None,
+) -> Path:
+    """Write ``runs/<run-id>/facts.png`` — the five source-linked fact cards."""
+    root = workspace_root.resolve()
+    output_path = require_allowed_write_path(root / "runs" / run_id / "facts.png", workspace_root=root)
+    if output_path.exists():
+        raise FileExistsError(f"Refusing to overwrite existing facts strip: {output_path}")
+    return render_facts_strip(facts_cards(summaries, candidates, ledger=ledger), output_path=output_path)

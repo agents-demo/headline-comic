@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0",
+  "summaries": [
+    {
+      "story_id": "story-1",
+      "sentences": [
+        {"text": "A volunteer group installed three solar lamps along the harbor path on Friday.", "ledger_fact_ids": ["f1-1", "f1-2"]},
+        {"text": "The lamps are meant to help evening walkers see the steps.", "ledger_fact_ids": ["f1-1"]}
+      ]
+    },
+    {
+      "story_id": "story-2",
+      "sentences": [
+        {"text": "The public library added a printed walking map to its weekend notice board.", "ledger_fact_ids": ["f2-1"]},
+        {"text": "The map marks six accessible routes near the river.", "ledger_fact_ids": ["f2-1"]}
+      ]
+    },
+    {
+      "story_id": "story-3",
+      "sentences": [
+        {"text": "Market vendors put up a blue canopy for Saturday's outdoor stalls.", "ledger_fact_ids": ["f3-1"]},
+        {"text": "Organizers expect twelve tables to join the market.", "ledger_fact_ids": ["f3-1"]}
+      ]
+    },
+    {
+      "story_id": "story-4",
+      "sentences": [
+        {"text": "A neighborhood garden shared packets of native flower seeds at its monthly open day.", "ledger_fact_ids": ["f4-1"]},
+        {"text": "Visitors could take one packet while supplies lasted.", "ledger_fact_ids": ["f4-1"]}
+      ]
+    },
+    {
+      "story_id": "story-5",
+      "sentences": [
+        {"text": "A repair shop reopened its clock workshop after replacing two workbenches.", "ledger_fact_ids": ["f5-1"]},
+        {"text": "The shop plans a free demonstration next Wednesday.", "ledger_fact_ids": ["f5-1"]}
+      ]
+    }
+  ]
+}

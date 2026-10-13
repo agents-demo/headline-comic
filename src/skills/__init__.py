@@ -96,10 +96,20 @@ from .image_gen import (
     scene_spec,
     view_for,
 )
+from .compose import (
+    AI_GENERATED_MARK,
+    ComposeError,
+    compose_comic,
+    page_size,
+    panel_shots,
+    run as run_composer,
+)
 
 __all__ = [
+    "AI_GENERATED_MARK",
     "ArticleText",
     "Check",
+    "ComposeError",
     "DEFAULT_CAST",
     "DEFAULT_LIST_LIMIT",
     "FICTION_LABEL",
@@ -131,6 +141,7 @@ __all__ = [
     "check_storyboard_panels",
     "classify",
     "cluster_items",
+    "compose_comic",
     "default_view",
     "extract_ledgers",
     "fetch_article_text",
@@ -144,6 +155,8 @@ __all__ = [
     "normalize_camera",
     "normalize_title",
     "normalize_whitespace",
+    "page_size",
+    "panel_shots",
     "parse_feed",
     "rank_clusters",
     "render_summaries_markdown",
@@ -151,6 +164,7 @@ __all__ = [
     "run_article_text",
     "run_checks",
     "run_checks_skill",
+    "run_composer",
     "run_director",
     "run_summariser",
     "run_verifier",

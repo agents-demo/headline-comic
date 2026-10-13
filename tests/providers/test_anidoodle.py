@@ -23,7 +23,7 @@ class AniDoodleVideoProviderTests(unittest.TestCase):
     def make_artifacts(self, root: Path, run_id: str, *, duration: float = 8, audio: str = "none") -> None:
         run_dir = root / "runs" / run_id
         run_dir.mkdir(parents=True)
-        (run_dir / "video.mp4").write_bytes(b"fixture mp4")
+        (run_dir / "shots.mp4").write_bytes(b"fixture mp4")
         (run_dir / "manifest.json").write_text(
             json.dumps({"durationSeconds": duration, "audio": audio}), encoding="utf-8"
         )
@@ -49,7 +49,7 @@ class AniDoodleVideoProviderTests(unittest.TestCase):
                 result = provider.render(VideoRequest("demo", max_duration_s=10))
 
             self.assertIsInstance(provider, VideoProvider)
-            self.assertEqual(result.video_path, root.resolve() / "runs" / "demo" / "video.mp4")
+            self.assertEqual(result.video_path, root.resolve() / "runs" / "demo" / "shots.mp4")
             self.assertEqual(result.manifest_path, root.resolve() / "runs" / "demo" / "manifest.json")
             self.assertEqual(result.duration_s, 8)
             self.assertFalse(result.has_audio)

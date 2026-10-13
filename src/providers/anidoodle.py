@@ -76,7 +76,7 @@ class AniDoodleVideoProvider:
             check=True,
         )
 
-        video_path = run_dir / "video.mp4"
+        video_path = run_dir / "shots.mp4"
         manifest_path = run_dir / "manifest.json"
         if not video_path.is_file() or not manifest_path.is_file():
             raise RuntimeError("AniDoodle completed without the expected MP4 and manifest")

@@ -40,3 +40,32 @@ Historical environment notes from the original source-checkout session, supersed
 ## T018 — pipeline wiring decision (2026-10-12)
 
 The S1-S9 text half is orchestrated by a deterministic in-process runner (`src/flow/pipeline.py`) rather than the framework's `run_swarmflow`, because `run_swarmflow` needs a live Team runtime (model, observer, messager, session_id, worker specs) and a model key, which are presenter-key and paid-call concerns deferred to T034/T035. The runner encodes exactly the stage list and failure-routing rules a Swarmflow script would: a failed blocking check routes to the stage that owns it (`owner` -> stage), the earliest such stage and everything downstream regenerates in memory, and only accepted artifacts are saved — which keeps the skills' refuse-to-overwrite guards intact while still bounding retries at `max_loops=2` (FR-006). The same module writes `run.log` stage timings (FR-011) and charges every model call against a `TokenBudget` (FR-012). When the gateway is up, T034/T035 mount this runner on it.
+
+## JSON2Video (evaluated 2026-10-13, set aside for T043)
+
+JSON2Video was evaluated as a candidate "true video model" and **set aside**: it is a
+deterministic FFmpeg *compositor* (motion graphics over stills + transitions + built-in
+TTS), **not** a generative image-to-video model, so it cannot deliver the T043
+image-to-video step-change. Confirmed facts from the official docs (no live calls made):
+
+- **Auth/base**: header `x-api-key` (not Bearer); `Content-Type: application/json`;
+  base `https://api.json2video.com/v2`. Missing/invalid key → 403; no credits → 401.
+- **Workflow**: `POST /v2/movies` → `200` with a 16-char `project` id (no cost
+  estimate in the response); poll `GET /v2/movies?project=<id>` (≥ 5 s apart) until
+  `status` is `done` or `error`; download via `movie.url`. `DELETE /v2/movies` removes.
+- **Request shape**: a Movie object (`resolution`/`quality`/`width`/`height`/`fps`,
+  `scenes[]` of `elements[]`, `elements[]` overlaying every scene, `variables`,
+  `exports[]`). Element `type` is required; the asset field is `src` (not `url`).
+  `voice`/`audio` elements do inline TTS/audio at render time (Azure + ElevenLabs).
+- **No dry-run/estimate endpoint.** Validate locally against
+  `https://json2video.com/docs/v2/movie-schema.json` (or the OpenAPI spec at
+  `https://json2video.com/docs/v2/openapi.json`); never call `POST /v2/movies` to
+  validate. Invalid/oversized bodies are 400/413 pre-render; failed renders are not
+  billed (but a render must still start).
+- **Free tier**: ~600 one-time credits ≈ 1 credit/sec for ≤1080p; 60 s/movie cap;
+  **output is watermarked** on the free plan. TTS voice-over costs 0 extra credits.
+
+Implication recorded for T043: any adapter must be built validation-first (local
+`movie-schema.json` check + an injectable/mock HTTP transport for tests) and only make a
+live render under explicit approval, since there is no credit-free server-side dry run.
+The watermark also means free-tier renders are unsuitable for the polished demo.

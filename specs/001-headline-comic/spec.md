@@ -187,4 +187,20 @@ Revision 3 (2026-10-11) adds Tavily for article text.
 | Article text comes from Tavily Extract, with per-article fallbacks | FR-002; tasks.md T010 |
 | Tavily credits logged; Tavily API added to the host allowlist | FR-012, FR-014 |
 | SC-3 is checked against the original article pages | Section 8 |
+
+Revision 4 (2026-10-13) records the JSON2Video evaluation and the pre-T034 quality
+upgrade. JSON2Video was evaluated as the "true video model" and set aside: it is a
+deterministic FFmpeg compositor (motion graphics + transitions + built-in TTS), not a
+generative image-to-video model, its free tier is watermarked, and it has no server-side
+dry-run/estimate endpoint — so the model-backed image-to-video path stays T043. Fish
+Audio narration (free model) is now wired into the assembled videos (T044), and the
+fallback pan/zoom honors the per-shot character focal point and alternates zoom
+direction (T045). Findings are in `docs/api-notes.md`; provider decision in
+`docs/provider-notes.md`.
+
+| Change | Where |
+|--------|-------|
+| JSON2Video set aside (compositor, not generative); model-backed video stays T043 | Open question 4; FR-010; tasks.md T043 |
+| Fish Audio narration wired into the assembled video/fallback (T044) | FR-010, FR-017; tasks.md |
+| Fallback pan/zoom uses the focal point and alternates direction (T045) | FR-017, D6; tasks.md |
 | Risk row for Tavily | Section 9 |

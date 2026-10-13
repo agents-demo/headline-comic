@@ -12,6 +12,7 @@ from .contracts import (
     VideoResult,
 )
 from .anidoodle import AniDoodleVideoProvider
+from .fishaudio import FishAudioError, FishAudioProvider
 from .llm import ChatError, ChatResult, DeepSeekChatProvider
 from .tavily import ExtractResult, TavilyExtractError, TavilyExtractProvider
 
@@ -21,6 +22,8 @@ __all__ = [
     "ChatResult",
     "DeepSeekChatProvider",
     "ExtractResult",
+    "FishAudioError",
+    "FishAudioProvider",
     "ImageProvider",
     "ImageRequest",
     "ImageResult",

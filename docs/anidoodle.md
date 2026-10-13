@@ -60,4 +60,10 @@ Confirmed against the engine source at commit `06f8be2bef0faa94e7eb6009ef23b36a0
 - `render.mjs` accepts `--workers 2` (default is CPU-derived); the run is verified in-tool (determinism probe: forward-vs-reversed hash-identical frames) and prints a per-shot frame-cost budget report.
 - The render needs ffmpeg/ffprobe on `PATH` (`render_video.mjs` checks both with `-version`). `AniDoodleVideoProvider._ffmpeg_bin_dir` discovers the vendored ffmpeg under `runs/_tools/ffmpeg/*/bin` and prepends it to `PATH`, so the adapter runs without manual PATH setup when the vendored copy is present.
 
-A real fixture smoke render (`t023-fixture`, 8 shots, 44.0 s) produced `video.mp4` at 1280x720/24 fps/1056 frames with 20/20 determinism, duration `44` from ffprobe, and `manifest.json` with `audio: "none"`.
+A real fixture smoke render (`t023-fixture`, 8 shots, 44.0 s) produced `shots.mp4` at 1280x720/24 fps/1056 frames with 20/20 determinism, duration `44` from ffprobe, and `manifest.json` with `audio: "none"`.
+
+## T028 — music-box narration bed (2026-10-13)
+
+The narration bed is an original hand-written `musicBox` piece, `scripts/anidoodle/music/bed.ts` (`townHallSteps`): C lydian, 12/8 at 112, a four-bar melody over a triplet-eighth arp and a root bass, with a 1.6 s tail. It passes all hard `music.mjs check` gates (key/mode, ghost/reverb/masking, stems, novelty vs 17 shipped pieces) and renders deterministically to a 10.57 s, -16 LUFS, -5.72 dBTP WAV (`runs/music-sample/town-hall-steps.wav`).
+
+The presenter listened to the 8-second sample and approved it; they describe the felt mood as "happy relax sleepy". The score's declared section mood stays `curious` (C lydian's raised 4th) — the listener's words win on how the piece *feels* and are recorded here rather than relabelling the score, because the style's mood vocabulary is fixed and the notes are approved as-is. Fitting this approved bed to the ~44 s film length is the remaining music step (`music.mjs render --fit --seconds N`).

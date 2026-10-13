@@ -13,21 +13,24 @@ one run directory and produces both finished videos:
 
 The verification is deterministic ffprobe code: both files exist, are 1280x720,
 carry an audio stream, sit under 60 seconds, and carry the ``title``/``comment``
-metadata. Narration is the subtitles-only path (no TTS clips are passed), which
-is the offline FR-017 degradation — the gate does not need the Fish Audio key or
-a network, and the music bed still plays.
+metadata. Narration is synthesized through the Fish Audio free model when
+``FISH_API_KEY`` is present and passed to both assemblies (so the finished videos
+carry the spoken track); without the key the run degrades to the subtitles-only
+FR-017 path and the music bed still plays.
 
 Usage::
 
     PYTHONPATH=. .venv/Scripts/python.exe -m scripts.gate3 [--run-id gate3] \
-        [--skip-keyframes] [--skip-video] [--skip-music] [--verify-only] [--force]
+        [--skip-keyframes] [--skip-video] [--skip-music] [--skip-narration] \
+        [--verify-only] [--force]
 
 ``--skip-video`` reuses an existing ``shots.mp4`` (the AniDoodle whole-run render
 is the slow step); ``--skip-music`` reuses an existing ``audio/bed.wav`` (which
 needs the scaffolded AniDoodle music engine); ``--skip-keyframes`` reuses the
-keyframes (the AniDoodle still render). ``--verify-only`` checks an
-already-assembled run. ``--force`` clears the run dir first (the skills refuse
-to overwrite their own outputs).
+keyframes (the AniDoodle still render); ``--skip-narration`` forces the
+subtitles-only path (also the automatic behaviour when ``FISH_API_KEY`` is unset).
+``--verify-only`` checks an already-assembled run. ``--force`` clears the run dir
+first (the skills refuse to overwrite their own outputs).
 """
 
 from __future__ import annotations
@@ -43,11 +46,13 @@ from typing import Any
 from src.permissions.media_guard import UnitPrice
 from src.providers.anidoodle import AniDoodleVideoProvider
 from src.providers.anidoodle_image import AniDoodleImageProvider
+from src.providers.fishaudio import FishAudioProvider
 from src.skills import (
     generate_keyframes,
     run_assembler,
     run_fallback,
     run_music_gen,
+    run_tts_gen,
     run_video_gen,
 )
 from src.skills.assemble import _find_tool
@@ -58,6 +63,14 @@ FIXTURE = ROOT / "tests" / "fixtures" / "t006-sample"
 VIDEO_OUT = "video.mp4"
 FALLBACK_OUT = "fallback.mp4"
 BED_NAME = "bed.wav"
+
+# One $0 media quote covers the whole run (image + video + TTS). The video unit is
+# priced per shot and TTS per 1000 characters, matching ``media_guard`` expectations.
+UNIT_PRICES = {
+    "image": UnitPrice.create("anidoodle", "keyframe", "0"),
+    "video": UnitPrice.create("anidoodle", "shot", "0"),
+    "tts": UnitPrice.create("fishaudio", "1000_characters", "0"),
+}
 
 
 def _load(name: str) -> dict[str, Any]:
@@ -81,7 +94,8 @@ def render_keyframes(storyboard: dict, run_id: str) -> None:
         provider=provider,
         workspace_root=ROOT,
         run_id=run_id,
-        unit_prices={"image": UnitPrice.create("anidoodle", "keyframe", "0")},
+        unit_prices=UNIT_PRICES,
+        planned_categories=("image", "video", "tts"),
     )
 
 
@@ -96,7 +110,7 @@ def render_shots(storyboard: dict, run_id: str) -> None:
         provider=AniDoodleVideoProvider(ROOT),
         workspace_root=ROOT,
         run_id=run_id,
-        unit_prices={"video": UnitPrice.create("anidoodle", "video", "0")},
+        unit_prices={"video": UNIT_PRICES["video"]},
     )
 
 
@@ -109,7 +123,28 @@ def render_bed(storyboard: dict, run_id: str) -> None:
     run_music_gen(storyboard, workspace_root=ROOT, run_id=run_id)
 
 
-def assemble_generated(story: dict, storyboard: dict, candidates: dict, summaries: dict, ledger: dict, run_id: str) -> None:
+def render_narration(storyboard: dict, run_id: str, *, provider=None, tts_runner=run_tts_gen) -> list:
+    """Synthesize Fish Audio narration (free model) and return its clips.
+
+    Degrades to the subtitles-only path (``[]``) when no ``FISH_API_KEY`` is present,
+    so the gate stays runnable offline (FR-017). Clips are cached via
+    ``audio/narration.json``, so re-runs reuse them without re-synthesizing.
+    """
+    provider = provider if provider is not None else FishAudioProvider()
+    if not getattr(provider, "api_key", ""):
+        print("  narration: no FISH_API_KEY, subtitles-only")
+        return []
+    print("  narration: synthesizing Fish Audio narration (free model) ...")
+    return tts_runner(
+        storyboard,
+        provider=provider,
+        workspace_root=ROOT,
+        run_id=run_id,
+        unit_prices={"tts": UNIT_PRICES["tts"]},
+    )
+
+
+def assemble_generated(story: dict, storyboard: dict, candidates: dict, summaries: dict, ledger: dict, run_id: str, clips: list | None = None) -> None:
     out = _run_dir(run_id) / VIDEO_OUT
     if out.is_file():
         print(f"  generated:  already present ({VIDEO_OUT})")
@@ -123,13 +158,14 @@ def assemble_generated(story: dict, storyboard: dict, candidates: dict, summarie
         workspace_root=ROOT,
         run_id=run_id,
         ledger=ledger,
+        clips=clips,
         video_path=_run_dir(run_id) / "shots.mp4",
         bed_path=_run_dir(run_id) / "audio" / BED_NAME,
         output_name=VIDEO_OUT,
     )
 
 
-def assemble_fallback(story: dict, storyboard: dict, candidates: dict, summaries: dict, ledger: dict, run_id: str) -> None:
+def assemble_fallback(story: dict, storyboard: dict, candidates: dict, summaries: dict, ledger: dict, run_id: str, clips: list | None = None) -> None:
     out = _run_dir(run_id) / FALLBACK_OUT
     if out.is_file():
         print(f"  fallback:   already present ({FALLBACK_OUT})")
@@ -143,6 +179,7 @@ def assemble_fallback(story: dict, storyboard: dict, candidates: dict, summaries
         workspace_root=ROOT,
         run_id=run_id,
         ledger=ledger,
+        clips=clips,
         bed_path=_run_dir(run_id) / "audio" / BED_NAME,
     )
 
@@ -222,6 +259,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--skip-keyframes", action="store_true", help="reuse existing keyframes instead of rendering")
     parser.add_argument("--skip-video", action="store_true", help="reuse existing shots.mp4 instead of the AniDoodle render")
     parser.add_argument("--skip-music", action="store_true", help="reuse existing audio/bed.wav instead of rendering")
+    parser.add_argument("--skip-narration", action="store_true", help="skip Fish Audio narration (subtitles-only)")
     parser.add_argument("--verify-only", action="store_true", help="only verify an already-assembled run")
     parser.add_argument("--force", action="store_true", help="clear runs/<run-id> before rendering")
     args = parser.parse_args(argv)
@@ -250,8 +288,13 @@ def main(argv: list[str] | None = None) -> int:
             print("music:     skipped (reusing existing bed.wav)")
         else:
             render_bed(storyboard, args.run_id)
-        assemble_generated(story, storyboard, candidates, summaries, ledger, args.run_id)
-        assemble_fallback(story, storyboard, candidates, summaries, ledger, args.run_id)
+        if args.skip_narration:
+            print("narration: skipped (subtitles-only)")
+            clips: list = []
+        else:
+            clips = render_narration(storyboard, args.run_id)
+        assemble_generated(story, storyboard, candidates, summaries, ledger, args.run_id, clips=clips)
+        assemble_fallback(story, storyboard, candidates, summaries, ledger, args.run_id, clips=clips)
 
     report = verify_run(args.run_id, story)
     _print_report(report)

@@ -109,6 +109,12 @@ class SceneSpecTests(unittest.TestCase):
             self.assertIn(char["name"], ("courier", "mayor", "pigeon"))
             self.assertIn(char["view"], ("front", "threeQuarter", "side", "back"))
             self.assertNotEqual(char["view"], "back")
+            # The shot's normalized action rides along so the video renderer can
+            # animate a walk vs. a wave instead of a static pose (T047).
+            self.assertIn(
+                char["action"],
+                ("stand", "point", "walk", "flutter", "wave", "work", "gather"),
+            )
 
     def test_wide_shot_uses_identity_zoom(self) -> None:
         spec = scene_spec(self._shot("shot-01"))

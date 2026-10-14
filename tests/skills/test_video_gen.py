@@ -72,6 +72,12 @@ class VideoSpecsTests(unittest.TestCase):
         for spec in specs:
             self.assertIn(spec["camera"]["mode"], ("zoom", "overhead"))
             self.assertIn("duration_s", spec)
+            # Each character carries its action through to the video renderer (T047).
+            for char in spec["characters"]:
+                self.assertIn(
+                    char["action"],
+                    ("stand", "point", "walk", "flutter", "wave", "work", "gather"),
+                )
         self.assertEqual(specs[0]["duration_s"], 5.0)
 
     def test_missing_shots_fails_closed(self) -> None:

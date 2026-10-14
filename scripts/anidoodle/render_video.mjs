@@ -70,6 +70,7 @@ if (!existsSync(videoMod)) run("node", [scaffold, filmDir, "--film", "video", "-
 const coreDir = join(filmDir, "src", "canvas-core");
 copyFileSync(join(repo, "scripts", "anidoodle", "scenes", "video.ts"), join(coreDir, "video.ts"));
 copyFileSync(join(repo, "scripts", "anidoodle", "cast", "cast.ts"), join(coreDir, "cast.ts"));
+copyFileSync(join(repo, "scripts", "anidoodle", "cast", "motion.ts"), join(coreDir, "motion.ts"));
 copyFileSync(scenesPath, join(coreDir, "videoScenes.ts"));
 
 const nodeModulesBin = join(dirname(process.execPath), "node_modules", "npm", "bin");

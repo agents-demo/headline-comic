@@ -5,12 +5,22 @@
 // captions or audio are added here — those are T028/T029 work on top of this
 // silent render.
 //
+// Since T047 the zoom shots are no longer near-stills: the camera dollies on an
+// ease-in-out-cubic curve in log2 zoom (the engine's dolly technique), the town,
+// props and characters sit on separate depth planes that separate into parallax
+// during the push (the engine's planeScale, re-normalised so the base composition
+// is unchanged), and each character is animated from its normalized action via
+// poseFor() — a walk swings and drifts, a point raises an arm, a pigeon flaps.
+// Everything stays pure: poseFor is a function of the shot-relative frame only.
+//
 // bpm is set to 60 * FPS so the beat grid is one frame: shot boundaries land on
 // any frame, which lets a fractional storyboard duration (e.g. 5.5 s) map to its
 // exact frame count instead of snapping to whole beats.
 import type { Ctx, Env } from "./core";
 import type { Film } from "./film";
+import type { Pose } from "./cast";
 import { videoScenes } from "./videoScenes";
+import { easeInOutCubic, poseFor } from "./motion";
 import {
   drawTown,
   drawLamp,
@@ -37,11 +47,19 @@ const H = 720;
 const FPS = 24;
 const BPM = FPS * 60; // beat = 1 frame (see module comment)
 
-type View = (ctx: Ctx) => void;
+type View = (ctx: Ctx, pose?: Pose) => void;
+type CharacterSpec = {
+  name: string;
+  view: string;
+  x: number;
+  y: number;
+  scale: number;
+  action: string;
+};
 type Spec = {
   shot_id: string;
   camera: { mode: "zoom"; scale: number; fx: number; fy: number } | { mode: "overhead" };
-  characters: { name: string; view: string; x: number; y: number; scale: number }[];
+  characters: CharacterSpec[];
   props: string[];
   duration_s: number;
 };
@@ -77,10 +95,38 @@ const PROP_PLACEMENT: Record<string, { draw: View; x: number; y: number; s: numb
 
 const MARKER: Record<string, string> = { courier: "#2e6f95", mayor: "#c0392b", pigeon: "#33475b" };
 
-// Smoothstep easing so the camera eases into and out of its push-in instead of a
-// constant drift.
-function easeInOut(t: number): number {
-  return t * t * (3 - 2 * t);
+// Camera + depth constants (see module comment for the engine rationale).
+const ZOOM_PUSH = 1.07; // total dolly factor, matching the prior 7% push
+const TOWN_DEPTH = 0.35; // background: positive z recedes during the push
+const PROP_DEPTH = 0; // hero plane
+const CHAR_DEPTH = -0.2; // foreground: negative z crosses the lens
+const WALK_TRAVEL = 40; // px of horizontal drift across a walking character's shot
+
+// The engine's planeScale: screen px per world unit on a plane at depth z.
+function planeScale(zoom: number, z: number): number {
+  return 1 / (1 / zoom + z);
+}
+
+// Relative depth scale: `base` at the shot's base zoom, re-normalised so every
+// plane draws byte-identically to the flat composition at p=0 and only separates
+// as the camera pushes. This preserves the locked style-bible frame.
+function depthScale(zoom: number, z: number, base: number): number {
+  return base * (planeScale(zoom, z) / planeScale(base, z));
+}
+
+// Dolly the zoom in log2 with ease-in-out-cubic, staying inside the original
+// [scale, scale*ZOOM_PUSH] range. Interpolating in log2 keeps the push uniform in
+// apparent size (the engine's technique).
+function dollyZoom(base: number, p: number): number {
+  const lo = Math.log2(base);
+  const hi = Math.log2(base * ZOOM_PUSH);
+  return Math.pow(2, lo + (hi - lo) * easeInOutCubic(p));
+}
+
+// Horizontal drift for a character across the shot; walkers cross the scene,
+// everyone else holds position.
+function travelX(action: string, p: number): number {
+  return action === "walk" ? WALK_TRAVEL * (p - 0.5) : 0;
 }
 
 function drawOverhead(ctx: Ctx, spec: Spec, p: number) {
@@ -96,15 +142,39 @@ function drawOverhead(ctx: Ctx, spec: Spec, p: number) {
   spec.characters.forEach((c, i) => {
     const x = W * (0.4 + 0.2 * i);
     const y = H * 0.5;
+    // A gentle bob (and drift for walkers) keeps the markers alive.
+    const pose = poseFor(c.action, p);
+    const mx = x + travelX(c.action, p);
+    const my = y - pose.bob;
     ctx.fillStyle = MARKER[c.name] || "#33475b";
     ctx.beginPath();
-    ctx.arc(x, y, 26, 0, Math.PI * 2);
+    ctx.arc(mx, my, 26, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = "#e6b48a";
     ctx.beginPath();
-    ctx.arc(x, y - 4, 10, 0, Math.PI * 2);
+    ctx.arc(mx, my - 4, 10, 0, Math.PI * 2);
     ctx.fill();
   });
+}
+
+// Draw everything on one depth plane, centred on the focal point (fx, fy) at the
+// plane's relative zoom. `fn` draws in world space.
+function drawPlane(
+  ctx: Ctx,
+  fx: number,
+  fy: number,
+  base: number,
+  zoom: number,
+  z: number,
+  fn: () => void,
+) {
+  const k = depthScale(zoom, z, base);
+  ctx.save();
+  ctx.translate(W / 2, H / 2);
+  ctx.scale(k, k);
+  ctx.translate(-fx, -fy);
+  fn();
+  ctx.restore();
 }
 
 function drawScene(ctx: Ctx, spec: Spec, p: number) {
@@ -112,32 +182,38 @@ function drawScene(ctx: Ctx, spec: Spec, p: number) {
     drawOverhead(ctx, spec, p);
     return;
   }
-  const { scale, fx, fy } = spec.camera;
-  const zoom = scale * (1 + 0.07 * easeInOut(p)); // a gentle push-in
-  ctx.save();
-  ctx.translate(W / 2, H / 2);
-  ctx.scale(zoom, zoom);
-  ctx.translate(-fx, -fy);
-  drawTown(ctx);
+  const { scale: base, fx, fy } = spec.camera;
+  const zoom = dollyZoom(base, p);
+
+  // Background: town (and the sky it paints) on the receding plane.
+  drawPlane(ctx, fx, fy, base, zoom, TOWN_DEPTH, () => drawTown(ctx));
+
+  // Hero plane: story props.
   for (const name of spec.props) {
     const place = PROP_PLACEMENT[name];
     if (!place) continue;
-    ctx.save();
-    ctx.translate(place.x, place.y);
-    ctx.scale(place.s, place.s);
-    place.draw(ctx);
-    ctx.restore();
+    drawPlane(ctx, fx, fy, base, zoom, PROP_DEPTH, () => {
+      ctx.save();
+      ctx.translate(place.x, place.y);
+      ctx.scale(place.s, place.s);
+      place.draw(ctx);
+      ctx.restore();
+    });
   }
+
+  // Foreground plane: characters, animated from their normalized action.
   for (const c of spec.characters) {
     const draw = CAST[c.name]?.[c.view];
     if (!draw) continue;
-    ctx.save();
-    ctx.translate(c.x, c.y);
-    ctx.scale(c.scale, c.scale);
-    draw(ctx);
-    ctx.restore();
+    const pose = poseFor(c.action, p);
+    drawPlane(ctx, fx, fy, base, zoom, CHAR_DEPTH, () => {
+      ctx.save();
+      ctx.translate(c.x + travelX(c.action, p), c.y);
+      ctx.scale(c.scale, c.scale);
+      draw(ctx, pose);
+      ctx.restore();
+    });
   }
-  ctx.restore();
 }
 
 let cursor = 0;

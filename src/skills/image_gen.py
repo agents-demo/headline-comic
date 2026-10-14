@@ -141,6 +141,7 @@ def _char_layout(characters: Sequence[tuple[str, str]], camera: str) -> list[dic
                 "x": round(x, 1),
                 "y": round(y, 1),
                 "scale": scale,
+                "action": action,
             }
         )
     return layout

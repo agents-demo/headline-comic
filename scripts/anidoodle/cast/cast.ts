@@ -3,7 +3,56 @@
 // function draws a single view centred on (0,0) at unit scale; the caller
 // translates and scales. Palette and proportions are fixed in docs/style-bible.md.
 // Pure functions only: no clock, no Math.random, no network.
+//
+// Since T047 each character view also accepts an optional `Pose` (from motion.ts):
+// zero-centred offsets that swing the arms/legs about their shoulders/hips, lean
+// and tilt the body and head, bob the whole figure, and (for the pigeon) flap the
+// wings. The neutral default reproduces the static drawing byte-for-byte, so the
+// keyframe and cast-sheet films (which pass no pose) are unchanged.
 import type { Ctx } from "./core";
+
+// A character pose: every field is a zero-centred offset. Positive armL/armR raises
+// the left/right arm, positive legL/legR swings a leg, lean/head are radians, bob is
+// unit px (up is positive), flap is radians of wing rotation.
+export type Pose = {
+  armL: number;
+  armR: number;
+  legL: number;
+  legR: number;
+  lean: number;
+  head: number;
+  bob: number;
+  flap: number;
+};
+
+function settled(p?: Pose): Pose {
+  return {
+    armL: p?.armL ?? 0,
+    armR: p?.armR ?? 0,
+    legL: p?.legL ?? 0,
+    legR: p?.legR ?? 0,
+    lean: p?.lean ?? 0,
+    head: p?.head ?? 0,
+    bob: p?.bob ?? 0,
+    flap: p?.flap ?? 0,
+  };
+}
+
+// Rotate everything drawn by `fn` by `a` radians about the pivot (px,py). A zero
+// angle short-circuits to draw `fn` with no transform, so the neutral pose is
+// byte-identical to the static drawing.
+function rotated(ctx: Ctx, px: number, py: number, a: number, fn: () => void) {
+  if (!a) {
+    fn();
+    return;
+  }
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(a);
+  ctx.translate(-px, -py);
+  fn();
+  ctx.restore();
+}
 
 // ---- palette (style-bible.md section 2) -------------------------------------
 const SKY_TOP = "#8ec9dc";
@@ -128,83 +177,139 @@ function courierHeadBack(ctx: Ctx) {
   ell(ctx, 0, -43, 26, 4, C_CAP);
 }
 
-function courierBodyFront(ctx: Ctx) {
+function courierBodyFront(ctx: Ctx, p: Pose) {
   ell(ctx, 0, 2, 24, 30, C_TUNIC);
   // satchel strap, left shoulder to right hip
   limb(ctx, -16, -22, 16, 20, 6, C_BAG);
   ell(ctx, 20, 8, 12, 15, C_BAG);
-  // arms
-  limb(ctx, -25, -10, -28, 14, 9, C_TUNIC);
-  dot(ctx, -28, 18, 5.5, C_SKIN);
-  limb(ctx, 25, -10, 28, 12, 9, C_TUNIC);
-  dot(ctx, 28, 16, 5.5, C_SKIN);
+  // arms (rotate about the shoulders; the letter stays static at the chest)
+  rotated(ctx, -25, -10, p.armL, () => {
+    limb(ctx, -25, -10, -28, 14, 9, C_TUNIC);
+    dot(ctx, -28, 18, 5.5, C_SKIN);
+  });
+  rotated(ctx, 25, -10, -p.armR, () => {
+    limb(ctx, 25, -10, 28, 12, 9, C_TUNIC);
+    dot(ctx, 28, 16, 5.5, C_SKIN);
+  });
   // letter in the right hand
   rect(ctx, 24, 12, 16, 12, C_LETTER);
   tri(ctx, [24, 12], [32, 18], [24, 24], C_FLAP);
-  // legs
-  rect(ctx, -15, 30, 12, 36, C_TROUSER);
-  rect(ctx, 3, 30, 12, 36, C_TROUSER);
-  rect(ctx, -17, 64, 19, 8, C_SHOE);
-  rect(ctx, 1, 64, 19, 8, C_SHOE);
+  // legs (rotate about the hips)
+  rotated(ctx, -9, 30, p.legL, () => {
+    rect(ctx, -15, 30, 12, 36, C_TROUSER);
+    rect(ctx, -17, 64, 19, 8, C_SHOE);
+  });
+  rotated(ctx, 9, 30, p.legR, () => {
+    rect(ctx, 3, 30, 12, 36, C_TROUSER);
+    rect(ctx, 1, 64, 19, 8, C_SHOE);
+  });
 }
-function courierBodyThreeQuarter(ctx: Ctx) {
+function courierBodyThreeQuarter(ctx: Ctx, p: Pose) {
   ell(ctx, 0, 2, 23, 30, C_TUNIC);
   limb(ctx, -18, -22, 14, 20, 6, C_BAG);
   ell(ctx, 19, 6, 11, 15, C_BAG);
-  limb(ctx, -26, -10, -30, 13, 9, C_TUNIC);
-  dot(ctx, -30, 17, 5.5, C_SKIN);
-  limb(ctx, 24, -10, 29, 12, 9, C_TUNIC);
-  dot(ctx, 29, 16, 5.5, C_SKIN);
+  rotated(ctx, -26, -10, p.armL, () => {
+    limb(ctx, -26, -10, -30, 13, 9, C_TUNIC);
+    dot(ctx, -30, 17, 5.5, C_SKIN);
+  });
+  rotated(ctx, 24, -10, -p.armR, () => {
+    limb(ctx, 24, -10, 29, 12, 9, C_TUNIC);
+    dot(ctx, 29, 16, 5.5, C_SKIN);
+  });
   rect(ctx, 23, 12, 16, 12, C_LETTER);
   tri(ctx, [23, 12], [31, 18], [23, 24], C_FLAP);
-  rect(ctx, -14, 30, 12, 36, C_TROUSER);
-  rect(ctx, 4, 30, 12, 36, C_TROUSER);
-  rect(ctx, -16, 64, 19, 8, C_SHOE);
-  rect(ctx, 2, 64, 19, 8, C_SHOE);
+  rotated(ctx, -8, 30, p.legL, () => {
+    rect(ctx, -14, 30, 12, 36, C_TROUSER);
+    rect(ctx, -16, 64, 19, 8, C_SHOE);
+  });
+  rotated(ctx, 10, 30, p.legR, () => {
+    rect(ctx, 4, 30, 12, 36, C_TROUSER);
+    rect(ctx, 2, 64, 19, 8, C_SHOE);
+  });
 }
-function courierBodySide(ctx: Ctx) {
+function courierBodySide(ctx: Ctx, p: Pose) {
   ell(ctx, 0, 2, 22, 30, C_TUNIC);
   limb(ctx, -14, -22, 18, 18, 6, C_BAG); // satchel strap, one shoulder
   ell(ctx, 18, 4, 11, 15, C_BAG);
-  limb(ctx, -24, -10, -30, 12, 9, C_TUNIC); // far arm
-  limb(ctx, 22, -8, 27, 12, 9, C_TUNIC); // near arm
-  dot(ctx, 27, 16, 5.5, C_SKIN);
+  rotated(ctx, -24, -10, p.armL, () => {
+    limb(ctx, -24, -10, -30, 12, 9, C_TUNIC); // far arm
+  });
+  rotated(ctx, 22, -8, -p.armR, () => {
+    limb(ctx, 22, -8, 27, 12, 9, C_TUNIC); // near arm
+    dot(ctx, 27, 16, 5.5, C_SKIN);
+  });
   rect(ctx, 24, 12, 16, 12, C_LETTER);
   tri(ctx, [24, 12], [32, 18], [24, 24], C_FLAP);
-  rect(ctx, -12, 30, 12, 36, C_TROUSER);
-  rect(ctx, 3, 30, 12, 36, C_TROUSER);
-  rect(ctx, -14, 64, 18, 8, C_SHOE);
-  rect(ctx, 1, 64, 18, 8, C_SHOE);
+  rotated(ctx, -6, 30, p.legL, () => {
+    rect(ctx, -12, 30, 12, 36, C_TROUSER);
+    rect(ctx, -14, 64, 18, 8, C_SHOE);
+  });
+  rotated(ctx, 9, 30, p.legR, () => {
+    rect(ctx, 3, 30, 12, 36, C_TROUSER);
+    rect(ctx, 1, 64, 18, 8, C_SHOE);
+  });
 }
-function courierBodyBack(ctx: Ctx) {
+function courierBodyBack(ctx: Ctx, p: Pose) {
   ell(ctx, 0, 2, 24, 30, C_TUNIC);
   limb(ctx, -18, -22, 14, 18, 6, C_BAG);
   ell(ctx, -20, 8, 12, 15, C_BAG);
-  limb(ctx, -25, -10, -28, 14, 9, C_TUNIC);
-  dot(ctx, -28, 18, 5.5, C_SKIN);
-  limb(ctx, 25, -10, 28, 12, 9, C_TUNIC);
-  dot(ctx, 28, 16, 5.5, C_SKIN);
-  rect(ctx, -15, 30, 12, 36, C_TROUSER);
-  rect(ctx, 3, 30, 12, 36, C_TROUSER);
-  rect(ctx, -17, 64, 19, 8, C_SHOE);
-  rect(ctx, 1, 64, 19, 8, C_SHOE);
+  rotated(ctx, -25, -10, p.armL, () => {
+    limb(ctx, -25, -10, -28, 14, 9, C_TUNIC);
+    dot(ctx, -28, 18, 5.5, C_SKIN);
+  });
+  rotated(ctx, 25, -10, -p.armR, () => {
+    limb(ctx, 25, -10, 28, 12, 9, C_TUNIC);
+    dot(ctx, 28, 16, 5.5, C_SKIN);
+  });
+  rotated(ctx, -9, 30, p.legL, () => {
+    rect(ctx, -15, 30, 12, 36, C_TROUSER);
+    rect(ctx, -17, 64, 19, 8, C_SHOE);
+  });
+  rotated(ctx, 9, 30, p.legR, () => {
+    rect(ctx, 3, 30, 12, 36, C_TROUSER);
+    rect(ctx, 1, 64, 19, 8, C_SHOE);
+  });
 }
 
-export function drawCourierFront(ctx: Ctx) {
-  courierHeadFront(ctx);
-  courierBodyFront(ctx);
+export function drawCourierFront(ctx: Ctx, pose?: Pose) {
+  const p = settled(pose);
+  ctx.save();
+  ctx.translate(0, -p.bob);
+  rotated(ctx, 0, 30, p.lean, () => {
+    rotated(ctx, 0, -28, p.head, () => courierHeadFront(ctx));
+    courierBodyFront(ctx, p);
+  });
+  ctx.restore();
 }
-export function drawCourierThreeQuarter(ctx: Ctx) {
-  courierHeadThreeQuarter(ctx);
-  courierBodyThreeQuarter(ctx);
+export function drawCourierThreeQuarter(ctx: Ctx, pose?: Pose) {
+  const p = settled(pose);
+  ctx.save();
+  ctx.translate(0, -p.bob);
+  rotated(ctx, 0, 30, p.lean, () => {
+    rotated(ctx, 0, -28, p.head, () => courierHeadThreeQuarter(ctx));
+    courierBodyThreeQuarter(ctx, p);
+  });
+  ctx.restore();
 }
-export function drawCourierSide(ctx: Ctx) {
-  courierHeadSide(ctx);
-  courierBodySide(ctx);
+export function drawCourierSide(ctx: Ctx, pose?: Pose) {
+  const p = settled(pose);
+  ctx.save();
+  ctx.translate(0, -p.bob);
+  rotated(ctx, 0, 30, p.lean, () => {
+    rotated(ctx, 0, -28, p.head, () => courierHeadSide(ctx));
+    courierBodySide(ctx, p);
+  });
+  ctx.restore();
 }
-export function drawCourierBack(ctx: Ctx) {
-  courierHeadBack(ctx);
-  courierBodyBack(ctx);
+export function drawCourierBack(ctx: Ctx, pose?: Pose) {
+  const p = settled(pose);
+  ctx.save();
+  ctx.translate(0, -p.bob);
+  rotated(ctx, 0, 30, p.lean, () => {
+    rotated(ctx, 0, -28, p.head, () => courierHeadBack(ctx));
+    courierBodyBack(ctx, p);
+  });
+  ctx.restore();
 }
 
 // ===========================================================================
@@ -237,73 +342,129 @@ function mayorHeadBack(ctx: Ctx) {
   ell(ctx, 0, -53, 23, 17, M_HAIR);
 }
 
-function mayorBodyFront(ctx: Ctx) {
+function mayorBodyFront(ctx: Ctx, p: Pose) {
   ell(ctx, 0, 2, 25, 31, M_SHIRT);
   // red sash across the chest, left shoulder to right hip
   limb(ctx, -18, -20, 16, 22, 11, M_SASH);
   dot(ctx, 2, 6, 5, M_GOLD); // medal at the sash centre
-  limb(ctx, -26, -10, -29, 14, 9, M_JACKET);
-  dot(ctx, -29, 18, 5.5, M_SKIN);
-  limb(ctx, 26, -10, 29, 12, 9, M_JACKET);
-  dot(ctx, 29, 16, 5.5, M_SKIN);
-  rect(ctx, -15, 31, 12, 36, M_TROUSER);
-  rect(ctx, 3, 31, 12, 36, M_TROUSER);
-  rect(ctx, -17, 65, 19, 8, M_SHOE);
-  rect(ctx, 1, 65, 19, 8, M_SHOE);
+  rotated(ctx, -26, -10, p.armL, () => {
+    limb(ctx, -26, -10, -29, 14, 9, M_JACKET);
+    dot(ctx, -29, 18, 5.5, M_SKIN);
+  });
+  rotated(ctx, 26, -10, -p.armR, () => {
+    limb(ctx, 26, -10, 29, 12, 9, M_JACKET);
+    dot(ctx, 29, 16, 5.5, M_SKIN);
+  });
+  rotated(ctx, -9, 31, p.legL, () => {
+    rect(ctx, -15, 31, 12, 36, M_TROUSER);
+    rect(ctx, -17, 65, 19, 8, M_SHOE);
+  });
+  rotated(ctx, 9, 31, p.legR, () => {
+    rect(ctx, 3, 31, 12, 36, M_TROUSER);
+    rect(ctx, 1, 65, 19, 8, M_SHOE);
+  });
 }
-function mayorBodyThreeQuarter(ctx: Ctx) {
+function mayorBodyThreeQuarter(ctx: Ctx, p: Pose) {
   ell(ctx, 0, 2, 24, 31, M_SHIRT);
   limb(ctx, -19, -20, 14, 22, 11, M_SASH);
   dot(ctx, 0, 5, 5, M_GOLD);
-  limb(ctx, -27, -10, -31, 13, 9, M_JACKET);
-  dot(ctx, -31, 17, 5.5, M_SKIN);
-  limb(ctx, 25, -10, 30, 12, 9, M_JACKET);
-  dot(ctx, 30, 16, 5.5, M_SKIN);
-  rect(ctx, -14, 31, 12, 36, M_TROUSER);
-  rect(ctx, 4, 31, 12, 36, M_TROUSER);
-  rect(ctx, -16, 65, 19, 8, M_SHOE);
-  rect(ctx, 2, 65, 19, 8, M_SHOE);
+  rotated(ctx, -27, -10, p.armL, () => {
+    limb(ctx, -27, -10, -31, 13, 9, M_JACKET);
+    dot(ctx, -31, 17, 5.5, M_SKIN);
+  });
+  rotated(ctx, 25, -10, -p.armR, () => {
+    limb(ctx, 25, -10, 30, 12, 9, M_JACKET);
+    dot(ctx, 30, 16, 5.5, M_SKIN);
+  });
+  rotated(ctx, -8, 31, p.legL, () => {
+    rect(ctx, -14, 31, 12, 36, M_TROUSER);
+    rect(ctx, -16, 65, 19, 8, M_SHOE);
+  });
+  rotated(ctx, 10, 31, p.legR, () => {
+    rect(ctx, 4, 31, 12, 36, M_TROUSER);
+    rect(ctx, 2, 65, 19, 8, M_SHOE);
+  });
 }
-function mayorBodySide(ctx: Ctx) {
+function mayorBodySide(ctx: Ctx, p: Pose) {
   ell(ctx, 0, 2, 23, 31, M_SHIRT);
   limb(ctx, -16, -20, 16, 22, 11, M_SASH);
   dot(ctx, 1, 6, 5, M_GOLD);
-  limb(ctx, -25, -10, -31, 12, 9, M_JACKET);
-  limb(ctx, 23, -8, 28, 12, 9, M_JACKET);
-  dot(ctx, 28, 16, 5.5, M_SKIN);
-  rect(ctx, -12, 31, 12, 36, M_TROUSER);
-  rect(ctx, 3, 31, 12, 36, M_TROUSER);
-  rect(ctx, -14, 65, 18, 8, M_SHOE);
-  rect(ctx, 1, 65, 18, 8, M_SHOE);
+  rotated(ctx, -25, -10, p.armL, () => {
+    limb(ctx, -25, -10, -31, 12, 9, M_JACKET);
+  });
+  rotated(ctx, 23, -8, -p.armR, () => {
+    limb(ctx, 23, -8, 28, 12, 9, M_JACKET);
+    dot(ctx, 28, 16, 5.5, M_SKIN);
+  });
+  rotated(ctx, -6, 31, p.legL, () => {
+    rect(ctx, -12, 31, 12, 36, M_TROUSER);
+    rect(ctx, -14, 65, 18, 8, M_SHOE);
+  });
+  rotated(ctx, 9, 31, p.legR, () => {
+    rect(ctx, 3, 31, 12, 36, M_TROUSER);
+    rect(ctx, 1, 65, 18, 8, M_SHOE);
+  });
 }
-function mayorBodyBack(ctx: Ctx) {
+function mayorBodyBack(ctx: Ctx, p: Pose) {
   ell(ctx, 0, 2, 25, 31, M_JACKET);
   limb(ctx, -18, -20, 16, 20, 11, M_SASH);
-  limb(ctx, -26, -10, -29, 14, 9, M_JACKET);
-  dot(ctx, -29, 18, 5.5, M_SKIN);
-  limb(ctx, 26, -10, 29, 12, 9, M_JACKET);
-  dot(ctx, 29, 16, 5.5, M_SKIN);
-  rect(ctx, -15, 31, 12, 36, M_TROUSER);
-  rect(ctx, 3, 31, 12, 36, M_TROUSER);
-  rect(ctx, -17, 65, 19, 8, M_SHOE);
-  rect(ctx, 1, 65, 19, 8, M_SHOE);
+  rotated(ctx, -26, -10, p.armL, () => {
+    limb(ctx, -26, -10, -29, 14, 9, M_JACKET);
+    dot(ctx, -29, 18, 5.5, M_SKIN);
+  });
+  rotated(ctx, 26, -10, -p.armR, () => {
+    limb(ctx, 26, -10, 29, 12, 9, M_JACKET);
+    dot(ctx, 29, 16, 5.5, M_SKIN);
+  });
+  rotated(ctx, -9, 31, p.legL, () => {
+    rect(ctx, -15, 31, 12, 36, M_TROUSER);
+    rect(ctx, -17, 65, 19, 8, M_SHOE);
+  });
+  rotated(ctx, 9, 31, p.legR, () => {
+    rect(ctx, 3, 31, 12, 36, M_TROUSER);
+    rect(ctx, 1, 65, 19, 8, M_SHOE);
+  });
 }
 
-export function drawMayorFront(ctx: Ctx) {
-  mayorHeadFront(ctx);
-  mayorBodyFront(ctx);
+export function drawMayorFront(ctx: Ctx, pose?: Pose) {
+  const p = settled(pose);
+  ctx.save();
+  ctx.translate(0, -p.bob);
+  rotated(ctx, 0, 31, p.lean, () => {
+    rotated(ctx, 0, -28, p.head, () => mayorHeadFront(ctx));
+    mayorBodyFront(ctx, p);
+  });
+  ctx.restore();
 }
-export function drawMayorThreeQuarter(ctx: Ctx) {
-  mayorHeadThreeQuarter(ctx);
-  mayorBodyThreeQuarter(ctx);
+export function drawMayorThreeQuarter(ctx: Ctx, pose?: Pose) {
+  const p = settled(pose);
+  ctx.save();
+  ctx.translate(0, -p.bob);
+  rotated(ctx, 0, 31, p.lean, () => {
+    rotated(ctx, 0, -28, p.head, () => mayorHeadThreeQuarter(ctx));
+    mayorBodyThreeQuarter(ctx, p);
+  });
+  ctx.restore();
 }
-export function drawMayorSide(ctx: Ctx) {
-  mayorHeadSide(ctx);
-  mayorBodySide(ctx);
+export function drawMayorSide(ctx: Ctx, pose?: Pose) {
+  const p = settled(pose);
+  ctx.save();
+  ctx.translate(0, -p.bob);
+  rotated(ctx, 0, 31, p.lean, () => {
+    rotated(ctx, 0, -28, p.head, () => mayorHeadSide(ctx));
+    mayorBodySide(ctx, p);
+  });
+  ctx.restore();
 }
-export function drawMayorBack(ctx: Ctx) {
-  mayorHeadBack(ctx);
-  mayorBodyBack(ctx);
+export function drawMayorBack(ctx: Ctx, pose?: Pose) {
+  const p = settled(pose);
+  ctx.save();
+  ctx.translate(0, -p.bob);
+  rotated(ctx, 0, 31, p.lean, () => {
+    rotated(ctx, 0, -28, p.head, () => mayorHeadBack(ctx));
+    mayorBodyBack(ctx, p);
+  });
+  ctx.restore();
 }
 
 // ===========================================================================
@@ -311,7 +472,10 @@ export function drawMayorBack(ctx: Ctx) {
 // ===========================================================================
 
 // Front: facing the viewer.
-export function drawPigeonFront(ctx: Ctx) {
+export function drawPigeonFront(ctx: Ctx, pose?: Pose) {
+  const p = settled(pose);
+  ctx.save();
+  ctx.translate(0, -p.bob);
   ell(ctx, 0, 4, 40, 48, P_BODY);
   ell(ctx, 0, 16, 24, 32, P_BELLY);
   ell(ctx, 0, -46, 25, 23, P_BODY);
@@ -320,49 +484,62 @@ export function drawPigeonFront(ctx: Ctx) {
   dot(ctx, -8, -50, 1.8, INK);
   dot(ctx, 9, -50, 3.4, P_EYE_W);
   dot(ctx, 10, -50, 1.8, INK);
-  ell(ctx, -37, 4, 12, 32, P_WING); // wings
-  ell(ctx, 37, 4, 12, 32, P_WING);
+  rotated(ctx, -37, -28, p.flap, () => ell(ctx, -37, 4, 12, 32, P_WING)); // wings
+  rotated(ctx, 37, -28, -p.flap, () => ell(ctx, 37, 4, 12, 32, P_WING));
   rect(ctx, -11, 52, 6, 24, P_BEAK); // legs
   rect(ctx, 5, 52, 6, 24, P_BEAK);
+  ctx.restore();
 }
 
 // Three-quarter: the Gate 0 proof pose, cleaned up and static.
-export function drawPigeonThreeQuarter(ctx: Ctx) {
+export function drawPigeonThreeQuarter(ctx: Ctx, pose?: Pose) {
+  const p = settled(pose);
+  ctx.save();
+  ctx.translate(0, -p.bob);
   ell(ctx, 0, 8, 48, 60, P_BODY, -0.08);
   ell(ctx, -5, 24, 28, 40, P_BELLY, -0.12);
   ell(ctx, 7, -49, 34, 32, P_BODY);
   tri(ctx, [39, -49], [70, -40], [39, -31], P_BEAK);
   dot(ctx, 20, -57, 9, P_EYE_W);
   dot(ctx, 23, -57, 3.6, INK);
-  ell(ctx, -20, 0, 32, 15, P_WING, -0.45);
+  rotated(ctx, 9, -14, p.flap, () => ell(ctx, -20, 0, 32, 15, P_WING, -0.45));
   rect(ctx, -20, 66, 7, 24, P_BEAK);
   rect(ctx, 8, 66, 7, 24, P_BEAK);
+  ctx.restore();
 }
 
 // Side: profile facing right.
-export function drawPigeonSide(ctx: Ctx) {
+export function drawPigeonSide(ctx: Ctx, pose?: Pose) {
+  const p = settled(pose);
+  ctx.save();
+  ctx.translate(0, -p.bob);
   ell(ctx, 0, 6, 46, 56, P_BODY, -0.05);
   ell(ctx, -6, 22, 26, 38, P_BELLY, -0.1);
   ell(ctx, 8, -48, 32, 30, P_BODY);
   tri(ctx, [38, -48], [70, -39], [38, -30], P_BEAK);
   dot(ctx, 22, -56, 8, P_EYE_W);
   dot(ctx, 25, -56, 3.2, INK);
-  ell(ctx, -16, 2, 30, 14, P_WING, -0.4);
+  rotated(ctx, 12, -10, p.flap, () => ell(ctx, -16, 2, 30, 14, P_WING, -0.4));
   tri(ctx, [-44, 34], [-66, 44], [-40, 52], P_WING); // tail
   rect(ctx, -14, 62, 6, 22, P_BEAK);
   rect(ctx, 10, 62, 6, 22, P_BEAK);
+  ctx.restore();
 }
 
 // Back: seen from behind, folded wings, no face.
-export function drawPigeonBack(ctx: Ctx) {
+export function drawPigeonBack(ctx: Ctx, pose?: Pose) {
+  const p = settled(pose);
+  ctx.save();
+  ctx.translate(0, -p.bob);
   ell(ctx, 0, 4, 40, 48, P_BODY);
   ell(ctx, 0, -46, 25, 23, P_BODY);
   tri(ctx, [-6, -66], [6, -66], [0, -78], P_BODY); // back of the head tuft
-  ell(ctx, -36, 4, 14, 34, P_WING);
-  ell(ctx, 36, 4, 14, 34, P_WING);
+  rotated(ctx, -36, -30, p.flap, () => ell(ctx, -36, 4, 14, 34, P_WING));
+  rotated(ctx, 36, -30, -p.flap, () => ell(ctx, 36, 4, 14, 34, P_WING));
   tri(ctx, [-14, 40], [14, 40], [0, 62], P_WING); // tail
   rect(ctx, -11, 52, 6, 24, P_BEAK);
   rect(ctx, 5, 52, 6, 24, P_BEAK);
+  ctx.restore();
 }
 
 // ===========================================================================

@@ -67,3 +67,12 @@ A real fixture smoke render (`t023-fixture`, 8 shots, 44.0 s) produced `shots.mp
 The narration bed is an original hand-written `musicBox` piece, `scripts/anidoodle/music/bed.ts` (`townHallSteps`): C lydian, 12/8 at 112, a four-bar melody over a triplet-eighth arp and a root bass, with a 1.6 s tail. It passes all hard `music.mjs check` gates (key/mode, ghost/reverb/masking, stems, novelty vs 17 shipped pieces) and renders deterministically to a 10.57 s, -16 LUFS, -5.72 dBTP WAV (`runs/music-sample/town-hall-steps.wav`).
 
 The presenter listened to the 8-second sample and approved it; they describe the felt mood as "happy relax sleepy". The score's declared section mood stays `curious` (C lydian's raised 4th) — the listener's words win on how the piece *feels* and are recorded here rather than relabelling the score, because the style's mood vocabulary is fixed and the notes are approved as-is. Fitting this approved bed to the ~44 s film length is the remaining music step (`music.mjs render --fit --seconds N`).
+
+## T047 — engine camera/easing formulas reused in the animated video (2026-10-14)
+
+Confirmed against `canvas-core/camera.ts` at commit `06f8be2bef0faa94e7eb6009ef23b36a0ae7b8a8`; `scenes/video.ts` and `cast/motion.ts` reimplement these as pure functions (no `Math.random`/`Date`) so the determinism probe still passes:
+
+- **Ease** (`EASE.inout`, easeInOutCubic): `u < 0.5 ? 4u³ : 1 - (-2u+2)³/2`. This is the engine's camera-default curve; `motion.ts` re-exports it as `easeInOutCubic`.
+- **Plane scale** (`planeScale(c, z=0)`): `1 / (1/c.zoom + z)` — screen pixels per world unit on a depth plane at `z`. Positive `z` recedes during a push-in; negative `z` crosses the lens (foreground).
+- **Zoom dolly**: the engine interpolates zoom in **log₂** so the push is uniform in apparent size; `video.ts`'s `dollyZoom` does the same over the existing `[scale, scale*1.07]` range.
+- **Depth re-normalisation**: `video.ts` uses `depthScale(zoom, z, base) = base * planeScale(zoom,z)/planeScale(base,z)` so every plane draws byte-identical to the flat composition at progress 0 and only separates as the camera pushes — this preserves the locked style-bible frame instead of adopting the engine's 3D skeletal rig (a different art style than D5's flat-vector cast).

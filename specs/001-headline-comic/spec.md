@@ -204,3 +204,15 @@ direction (T045). Findings are in `docs/api-notes.md`; provider decision in
 | Fish Audio narration wired into the assembled video/fallback (T044) | FR-010, FR-017; tasks.md |
 | Fallback pan/zoom uses the focal point and alternates direction (T045) | FR-017, D6; tasks.md |
 | Risk row for Tavily | Section 9 |
+
+Revision 5 (2026-10-14) polishes the two remaining Gate 3 quality gaps: the assembler
+now ducks the music bed under narration (T046) and the generated video is genuinely
+animated (T047). D6 is clarified: its "pan and zoom only" constraint binds the
+fallback renderer only — the generated video may animate (easing, parallax, poses) as
+part of FR-010's image-to-video deliverable.
+
+| Change | Where |
+|--------|-------|
+| Music bed sidechain-ducks under narration (T046) | FR-017; tasks.md |
+| Generated video animates poses, parallax and dolly (T047) | FR-010; tasks.md |
+| D6 clarified: fallback-only; generated video may animate | Section 5, D6 |

@@ -146,13 +146,24 @@ class CommandBuilderTests(unittest.TestCase):
         self.assertIn("[0:a]adelay=3000:all=1[a0]", fc)
         self.assertIn("[1:a]adelay=7500:all=1[a1]", fc)
         self.assertIn("amix=inputs=2:duration=longest:normalize=0[narr]", fc)
-        self.assertIn("volume=0.4,afade=t=out:st=15.5:d=2[music]", fc)
-        self.assertIn("[narr][music]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.98[aout]", fc)
+        # The bed is ducked under the narration via sidechaincompress, with both
+        # streams normalised to one rate/format first (mp3 44.1k mono vs wav 48k stereo).
+        self.assertIn("[narr]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[sc0]", fc)
+        self.assertIn("[sc0]asplit=2[sc][narrf]", fc)
+        self.assertIn("[2:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[bedf]", fc)
+        self.assertIn(
+            "[bedf][sc]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=400,"
+            "afade=t=out:st=15.5:d=2[music]",
+            fc,
+        )
+        self.assertIn("[narrf][music]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.98[aout]", fc)
 
     def test_audio_command_music_only(self) -> None:
         args = audio_command(ffmpeg="ffmpeg", narration=[], bed=Path("bed.wav"), total_s=17.5, output=Path("mix.wav"))
         fc = args[args.index("-filter_complex") + 1]
         self.assertNotIn("adelay", fc)
+        self.assertNotIn("sidechaincompress", fc)
+        self.assertNotIn("aresample", fc)
         self.assertIn("[0:a]volume=1,afade=t=out:st=15.5:d=2[music]", fc)
         self.assertIn("[music]alimiter=limit=0.98[aout]", fc)
 

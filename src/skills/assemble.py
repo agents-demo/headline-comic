@@ -32,9 +32,15 @@ from src.skills.tts_gen import NarrationClip
 VIDEO_W = 1280
 VIDEO_H = 720
 FPS = 24
-MUSIC_GAIN = 0.4  # bed ducked under narration
 MUSIC_GAIN_SOLO = 1.0  # full bed when it is the only audio (FR-017 subtitles-only)
 FADE_OUT_S = 2.0  # music fade at the end of the cut
+# Sidechain ducking: the bed drops under the narration and recovers between clips.
+SIDECHAIN_SR = 48000  # Fish returns 44.1k mono, the bed is 48k stereo; normalise both
+SIDECHAIN_FMT = "sample_fmts=fltp:channel_layouts=stereo"
+SIDECHAIN_THRESHOLD = 0.03  # linear; ~ -30 dB, below the -16 dB speech floor so speech ducks
+SIDECHAIN_RATIO = 8  # ~12 dB duck at mean speech (-16 dB), deeper at peaks
+SIDECHAIN_ATTACK_MS = 20
+SIDECHAIN_RELEASE_MS = 400
 
 _PAPER = "#f6f1e5"
 _INK = "#17212b"
@@ -312,7 +318,14 @@ def audio_command(
     total_s: float,
     output: Path,
 ) -> list[str]:
-    """Mix delayed narration clips over the (gained, faded) music bed."""
+    """Mix delayed narration clips over the music bed, ducking the bed under speech.
+
+    When narration is present the bed is sidechain-compressed by the time-aligned
+    narration (FR-010): the music drops whenever speech plays and recovers between
+    clips. Both streams are normalised to the same rate/format first (Fish returns
+    44.1k mono mp3, the bed is 48k stereo wav), which ``sidechaincompress`` requires.
+    With no narration the bed plays at solo gain, unchanged (FR-017 subtitles-only).
+    """
     cmd = [ffmpeg, "-y"]
     for path, _ in narration:
         cmd += ["-i", str(path)]
@@ -334,12 +347,19 @@ def audio_command(
         narr_label = None
 
     fade_start = max(0.0, total_s - FADE_OUT_S)
-    gain = MUSIC_GAIN if narration else MUSIC_GAIN_SOLO
-    filters.append(f"[{bed_index}:a]volume={gain:g},afade=t=out:st={fade_start:g}:d={FADE_OUT_S:g}[music]")
-
     if narr_label is not None:
-        filters.append(f"{narr_label}[music]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.98[aout]")
+        norm = f"aresample={SIDECHAIN_SR},aformat={SIDECHAIN_FMT}"
+        filters.append(f"{narr_label}{norm}[sc0]")
+        filters.append(f"[sc0]asplit=2[sc][narrf]")
+        filters.append(f"[{bed_index}:a]{norm}[bedf]")
+        filters.append(
+            f"[bedf][sc]sidechaincompress=threshold={SIDECHAIN_THRESHOLD:g}:ratio={SIDECHAIN_RATIO:g}"
+            f":attack={SIDECHAIN_ATTACK_MS}:release={SIDECHAIN_RELEASE_MS},"
+            f"afade=t=out:st={fade_start:g}:d={FADE_OUT_S:g}[music]"
+        )
+        filters.append(f"[narrf][music]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.98[aout]")
     else:
+        filters.append(f"[{bed_index}:a]volume={MUSIC_GAIN_SOLO:g},afade=t=out:st={fade_start:g}:d={FADE_OUT_S:g}[music]")
         filters.append("[music]alimiter=limit=0.98[aout]")
 
     cmd += ["-filter_complex", ";".join(filters), "-map", "[aout]", "-t", f"{total_s:g}", "-c:a", "pcm_s16le", str(output)]

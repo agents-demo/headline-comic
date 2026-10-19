@@ -204,6 +204,15 @@ def main(argv: list[str] | None = None) -> int:
         if run_dir.exists():
             shutil.rmtree(run_dir)
 
+    # Persist Step 3's JSON output so the live run dir carries the curation
+    # document the same way the pipeline's auto-curate path does.
+    for day, result in per_day.items():
+        curation.save_curation_document(
+            curation.build_curation_document(result),
+            workspace_root=ROOT,
+            run_id=f"t020-{day}",
+        )
+
     for day, result in per_day.items():
         print(f"  {day}: {len(result.selected)} stories")
         for candidate, reason in zip(result.selected, result.reasons):

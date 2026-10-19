@@ -299,5 +299,69 @@ class RetryLoopTests(unittest.TestCase):
             self.assertTrue(any(e["event"] == "stage_error" for e in entries))
 
 
+class CurationTests(unittest.TestCase):
+    """S2 auto-curates (LLM pick-5) when no human selected_ids are provided."""
+
+    def _candidates(self) -> list[dict]:
+        return [
+            {
+                "candidate_id": f"c-{i:02d}",
+                "title": f"Story {i}",
+                "url": f"https://news.example.test/{i}",
+                "publisher": "Example Wire",
+                "published_at": "2026-10-10T09:00:00Z",
+                "description": "",
+                "source": "rss",
+                "cluster_id": f"cl-{i}",
+                "safety_tags": [],
+                "hidden_by_safety": False,
+            }
+            for i in range(1, 7)
+        ]
+
+    def test_s2_autocurates_when_selected_ids_empty(self) -> None:
+        import json as _json
+
+        def chat(messages):
+            content = _json.dumps(
+                {"picks": [{"candidate_id": f"c-{i:02d}", "reason": "r"} for i in (5, 2, 6, 1, 3)]}
+            )
+            return ChatResult(content=content, model="test", prompt_tokens=1, completion_tokens=1)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            pipeline = TextPipeline(
+                workspace_root=Path(tmp),
+                run_id="r1",
+                selected_ids=(),
+                chat=chat,
+            )
+            pipeline.state["tagged"] = self._candidates()
+            pipeline._s2_pick()
+            self.assertEqual(
+                [c["candidate_id"] for c in pipeline.state["selected"]],
+                ["c-05", "c-02", "c-06", "c-01", "c-03"],
+            )
+            self.assertTrue((Path(tmp) / "runs" / "r1" / "curation.json").exists())
+
+    def test_s2_human_path_still_used_when_ids_provided(self) -> None:
+        def chat(messages):
+            raise AssertionError("chat must not be called when selected_ids are provided")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            pipeline = TextPipeline(
+                workspace_root=Path(tmp),
+                run_id="r1",
+                selected_ids=["c-01", "c-02", "c-03", "c-04", "c-05"],
+                chat=chat,
+            )
+            pipeline.state["tagged"] = self._candidates()
+            pipeline._s2_pick()
+            self.assertEqual(
+                [c["candidate_id"] for c in pipeline.state["selected"]],
+                ["c-01", "c-02", "c-03", "c-04", "c-05"],
+            )
+            self.assertFalse((Path(tmp) / "runs" / "r1" / "curation.json").exists())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -21,7 +21,7 @@ the interactive gateway.
 
 Stages (plan.md section 4):
 
-    S1 fetch/filter/rank   S2 pick-5              S3 evidence ledger
+    S1 fetch/filter/rank   S2 curate/pick-5       S3 evidence ledger
     S4 summaries           S5 writer              S6 director
     S7 code checks         S8 verifier            S9 approval
 
@@ -55,7 +55,7 @@ from src.flow.token_budget import (
     TokenBudget,
 )
 from src.providers.llm import ChatResult, DeepSeekChatProvider
-from src.skills import article_ledger, article_text, checks, news_fetch, safety, story, storyboard, verifier
+from src.skills import article_ledger, article_text, checks, curation, news_fetch, safety, story, storyboard, verifier
 
 # ``src.skills`` re-exports the ``summarise`` *function* under the same name, so
 # both ``from src.skills import summarise`` and ``import src.skills.summarise``
@@ -71,7 +71,7 @@ GENERATION_STAGES = ("S3", "S4", "S5", "S6")
 
 STAGE_TITLES = {
     "S1": "Fetch, filter, rank",
-    "S2": "Pick 5",
+    "S2": "Curate / pick 5",
     "S3": "Evidence ledger",
     "S4": "Summaries",
     "S5": "Writer",
@@ -165,7 +165,7 @@ class TextPipeline:
         *,
         workspace_root: Path,
         run_id: str,
-        selected_ids: Sequence[str],
+        selected_ids: Sequence[str] = (),
         chat: Chat | None = None,
         verify_chat: Chat | None = None,
         fetcher: news_fetch.Fetcher | None = None,
@@ -308,13 +308,25 @@ class TextPipeline:
         self.state["view"] = safety.default_view(tagged)
 
     def _s2_pick(self) -> None:
-        ids = pick_stories(self.selected_ids)
-        by_id = {str(c["candidate_id"]): c for c in (self.state.get("tagged") or [])}
+        tagged = self.state.get("tagged") or []
+        by_id = {str(c["candidate_id"]): c for c in tagged}
+        if self.selected_ids:
+            ids = pick_stories(self.selected_ids)
+            source = "human"
+        else:
+            result = curation.curate(tagged, chat=self.chat)
+            curation.save_curation_document(
+                curation.build_curation_document(result),
+                workspace_root=self.workspace_root,
+                run_id=self.run_id,
+            )
+            ids = [str(c["candidate_id"]) for c in result.selected]
+            source = "curation"
         missing = [cid for cid in ids if cid not in by_id]
         if missing:
             raise PipelineError("Picked ids not in the candidate list: " + ", ".join(missing))
         self.state["selected"] = [by_id[cid] for cid in ids]
-        self._log("selection", ids=ids)
+        self._log("selection", ids=ids, source=source)
 
     def _s3_articles(self) -> None:
         selected = self.state.get("selected") or []

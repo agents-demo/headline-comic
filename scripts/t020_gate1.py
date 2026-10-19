@@ -29,8 +29,9 @@ from pathlib import Path
 
 from src.env import load_env
 from src.flow.pipeline import TextPipeline
+from src.providers.llm import DeepSeekChatProvider
 from src.providers.tavily import ExtractResult, TavilyExtractProvider
-from src.skills import article_ledger, article_text, news_fetch, safety
+from src.skills import article_ledger, article_text, curation, news_fetch, safety
 from src.skills.checks import check_citations
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -61,25 +62,30 @@ def collect_items_by_day(feeds: list[news_fetch.FeedSpec]) -> dict[str, list[new
     return dict(by_day)
 
 
-def pick_five(items: list[news_fetch.RawItem]) -> list[dict]:
-    """Cluster, rank and return up to five distinct candidate stories for a day."""
+def candidates_for(items: list[news_fetch.RawItem]) -> list[dict]:
+    """Cluster, rank and safety-tag every distinct candidate for a set of items."""
 
     clusters = news_fetch.rank_clusters(news_fetch.cluster_items(items))
-    chosen: list[dict] = []
-    for index, cluster in enumerate(clusters):
-        if len(chosen) >= MIN_STORIES:
-            break
-        representative = news_fetch.choose_representative(cluster)
-        chosen.append(news_fetch.to_candidate(representative, cluster, index))
-    return chosen
+    candidates = [
+        news_fetch.to_candidate(news_fetch.choose_representative(cluster), cluster, index)
+        for index, cluster in enumerate(clusters)
+    ]
+    return safety.tag_candidates(candidates)
+
+
+def curate_five(items: list[news_fetch.RawItem], chat: curation.Chat) -> curation.CurationResult:
+    """Let the LLM pick exactly five distinct candidate stories for a day."""
+
+    return curation.curate(candidates_for(items), chat=chat)
 
 
 def pick_days(by_day: dict[str, list[news_fetch.RawItem]], count: int = DAYS) -> list[str]:
-    """Return the most-recent dates that each yield at least five distinct stories."""
+    """Return the most-recent dates that each yield at least five visible stories."""
 
     days: list[str] = []
     for day in sorted(by_day, reverse=True):
-        if len(pick_five(by_day[day])) >= MIN_STORIES:
+        visible = [c for c in candidates_for(by_day[day]) if not c["hidden_by_safety"]]
+        if len(visible) >= MIN_STORIES:
             days.append(day)
         if len(days) >= count:
             break
@@ -176,6 +182,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     load_env(ROOT / ".env")  # providers read keys from the process environment
+    provider = DeepSeekChatProvider()
+
+    def chat(messages: list[tuple[str, str]]):
+        return provider.complete(messages, json_mode=True)
+
     feeds = news_fetch.load_feeds(CONFIG)
     by_day = collect_items_by_day(feeds)
     days = pick_days(by_day, count=args.days)
@@ -183,7 +194,7 @@ def main(argv: list[str] | None = None) -> int:
         print("No days with enough distinct stories; aborting.")
         return 1
 
-    per_day = {day: pick_five(by_day[day]) for day in days}
+    per_day = {day: curate_five(by_day[day], chat) for day in days}
     print(f"Selected {len(days)} days: {', '.join(days)}")
 
     # Clear stale per-day artifacts from a prior run so the skills' refuse-to-
@@ -193,16 +204,18 @@ def main(argv: list[str] | None = None) -> int:
         if run_dir.exists():
             shutil.rmtree(run_dir)
 
-    for day, candidates in per_day.items():
-        print(f"  {day}: {len(candidates)} stories")
-        for candidate in candidates:
+    for day, result in per_day.items():
+        print(f"  {day}: {len(result.selected)} stories")
+        for candidate, reason in zip(result.selected, result.reasons):
             print(f"    - [{candidate['publisher']}] {candidate['title'][:70]}")
+            if reason:
+                print(f"        why: {reason}")
 
     # One Tavily Extract batch over the selected URLs, but cached per-URL to disk
     # so a re-run after a downstream failure does not spend a second batch
     # (Tavily is the one rate/cost-limited provider). Each cache entry is either
     # ``{"text": ...}`` or ``{"failed": reason}``.
-    urls = [candidate["url"] for candidates in per_day.values() for candidate in candidates]
+    urls = [candidate["url"] for result in per_day.values() for candidate in result.selected]
     cache_path = ROOT / "runs" / "t020-gate1" / "extract-cache.json"
     cache: dict[str, dict] = {}
     if cache_path.exists():
@@ -236,7 +249,7 @@ def main(argv: list[str] | None = None) -> int:
     for day in days:
         run_id = f"t020-{day}"
         pipeline = DayPipeline(
-            candidates=per_day[day],
+            candidates=list(per_day[day].selected),
             extractor=extractor_for(extracted, failed),
             workspace_root=ROOT,
             run_id=run_id,

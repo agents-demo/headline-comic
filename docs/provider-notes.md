@@ -160,3 +160,25 @@ T047 makes the generated AniDoodle video a real animated short instead of near-s
 - **`video.ts`** — dollies the camera on ease-in-out-cubic in log₂ zoom (the engine's dolly), draws town/props/characters on depth planes at z = +0.35 / 0 / −0.20 scaled by the engine's `planeScale`, re-normalised (`base · planeScale(zoom,z)/planeScale(base,z)`) so the base composition is unchanged and the planes only separate during the push, and adds continuous walk x-travel.
 
 Local render verification (t023 fixture, `render.mjs video --workers 2`): determinism probe 20/20 hash-identical, frame budget PASS, and a walk shot's start/end frames differ by mean-absolute luma YAVG 12.6 vs 7.9 for the camera move alone (pose + travel ≈ +60%). D6's "pan and zoom only" binds the *fallback* (`fallback.mp4`) only; enriching the generated video is in-spec (FR-010).
+
+## T048 — LLM curation call site (2026-10-19)
+
+The top-5 story pick now goes through an LLM on the **same** DeepSeek provider as the
+ledger/summaries/story/storyboard stages — no new endpoint or key. `src/skills/curation.py`
+sends the visible candidate pool (id, publisher, published_at, title, description
+truncated to 200 chars) in one `json_mode` call and expects
+`{"picks":[{"candidate_id","reason"}]}`; deterministic code re-attaches the full
+candidate objects and writes `curation.json`.
+
+- **Call count / cost**: one call per run (pipeline S2) or per day (the `t020_gate1.py`
+  live driver, which curates before its single Tavily batch so it still extracts only
+  the chosen URLs). Charged against the FR-012 token budget like every other model
+  call; it is a text/structure call, not a paid media (image/video/TTS) call, so T007
+  approval is not required.
+- **Fail-closed validation**: exactly 5 picks, distinct, every id present in the
+  visible set; `hidden_by_safety` candidates are excluded before the call, and a
+  malformed or wrong reply is retried once then surfaced as `CurationError`. A
+  malformed reply can therefore never inject an unknown id.
+- The human pick-5 gate (`hitl.pick_stories`) is unchanged and still used when the
+  caller supplies `selected_ids`; `TextPipeline` defaults to auto-curation when none
+  are given.

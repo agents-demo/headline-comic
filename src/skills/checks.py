@@ -26,6 +26,7 @@ from typing import Mapping, Sequence
 import jsonschema
 
 from src.permissions.media_guard import require_allowed_write_path
+from src.skills.storyboard import GAG_DEVICES, gag_device
 
 DEFAULT_CAST = ("courier", "mayor", "pigeon")
 BEAT_COUNT = 6
@@ -159,6 +160,46 @@ def check_storyboard_duration(storyboard: Mapping[str, object]) -> Check:
     return Check("storyboard-duration", True, f"shot durations sum to {total}s (37-51s)", "storyboard", "storyboard.json")
 
 
+def check_storyboard_gag(storyboard: Mapping[str, object]) -> Check:
+    """Every shot carries a gag with a valid device prefix, and all three devices appear.
+
+    The Director's prompt requires one comedic device per shot (Scale Contrast / Absurd
+    Literalization / Relatable Exaggeration); this is the deterministic guard that a
+    run is actually funny, not just cute. A missing or unlabelled gag, or a device the
+    run never uses, fails the storyboard and routes back to S6.
+    """
+    used: set[str] = set()
+    problems: list[str] = []
+    for shot in _shots(storyboard):
+        shot_id = shot.get("shot_id", "?")
+        gag = str(shot.get("gag") or "").strip()
+        device = gag_device(gag) if gag else None
+        if device is None:
+            problems.append(f"{shot_id} gag missing or unlabelled: {gag!r}")
+        else:
+            used.add(device)
+    missing = [device for device in GAG_DEVICES if device not in used]
+    if missing:
+        problems.append(f"comedic device(s) never used: {', '.join(missing)}")
+    if problems:
+        return Check("storyboard-gag", False, "; ".join(problems), "storyboard", "storyboard.json")
+    return Check("storyboard-gag", True, "every shot has a labelled gag and all three devices appear", "storyboard", "storyboard.json")
+
+
+def check_storyboard_fields(storyboard: Mapping[str, object]) -> Check:
+    """Every shot carries the H3-ready scene_setting and audio_cue (non-empty)."""
+    problems: list[str] = []
+    for shot in _shots(storyboard):
+        shot_id = shot.get("shot_id", "?")
+        if not str(shot.get("scene_setting") or "").strip():
+            problems.append(f"{shot_id} has no scene_setting")
+        if not str(shot.get("audio_cue") or "").strip():
+            problems.append(f"{shot_id} has no audio_cue")
+    if problems:
+        return Check("storyboard-fields", False, "; ".join(problems), "storyboard", "storyboard.json")
+    return Check("storyboard-fields", True, "every shot has a scene_setting and audio_cue", "storyboard", "storyboard.json")
+
+
 def check_citations(ledger: Mapping[str, object], summaries: Mapping[str, object]) -> Check:
     valid_ids: dict[str, set[str]] = {}
     for story in ledger.get("stories") or []:
@@ -261,6 +302,8 @@ def run_checks(
         check_storyboard_characters(storyboard, cast=cast),
         check_storyboard_narration(storyboard),
         check_storyboard_duration(storyboard),
+        check_storyboard_gag(storyboard),
+        check_storyboard_fields(storyboard),
         check_citations(ledger, summaries),
         _check_names("names-story", "story", "story.json", _story_text(story), names),
         _check_names("names-storyboard", "storyboard", "storyboard.json", _storyboard_text(storyboard), names),

@@ -5,9 +5,20 @@ T023 keyframes, T024 comic page, T027 video).
 
 ## 1. Look and feel
 
-A small, friendly, **original miniature town** seen in flat, rounded vector art
-(the AniDoodle renderer draws with canvas primitives, so the result is clean
-flat geometry, not a photographed clay set). The intended *feel* is clay:
+A small, friendly, **original miniature town**. Two renderers share the one
+storyboard and cast (D10):
+
+- **MiniMax-H3 (the generated video)** delivers the full miniature tilt-shift
+  comedy look — a 1-inch toy diorama filmed on a macro lens, shallow depth of
+  field with soft top-and-bottom bokeh, plastic/clay textures, glossy surfaces
+  and oversized round eyes. H3 renders image-to-video from each shot's keyframe
+  (FL2VA first-frame), so it animates the cast below rather than re-drawing them.
+- **AniDoodle (keyframes, comic, fallback)** remains the deterministic code-drawn
+  path: flat, rounded vector art carrying the same chunky silhouettes, palette and
+  character marks. It is the offline/$0 renderer and the source of the still
+  keyframes both the comic and the H3 first-frame use.
+
+Shared look rules, whichever renderer draws:
 
 - **Chunky, rounded forms.** Bodies, heads, roofs and props are soft ellipses and
   rounded rectangles. No sharp 90° corners, no hard outlines everywhere.
@@ -18,12 +29,14 @@ flat geometry, not a photographed clay set). The intended *feel* is clay:
 - **Original and clearly miniature.** This is the town from the story — never a
   real place, never a licensed property. No LEGO studs, no brick-pattern texture,
   no minifig proportions (D1: not LEGO).
-- **Deterministic.** Every scene is a pure function of the frame index; the same
-  source draws the same pixels every render (AniDoodle's reproducibility gate).
+- **Deterministic where it must be.** The AniDoodle keyframes, comic and fallback
+  are pure functions of their inputs (same source, same pixels — the
+  reproducibility gate). The H3 video is generative and is not bit-reproducible;
+  its consistency is pinned by the keyframe it animates.
 
-The flat-vector caveat is recorded in `docs/provider-notes.md` (T004): AniDoodle
-is code-drawn and cannot produce real clay shading. We keep the clay *palette and
-chunky silhouette* and accept flat fill as the renderer's honest output.
+AniDoodle's flat-vector caveat (T004) still stands for the comic/fallback: it
+cannot produce real clay shading or bokeh. The generated H3 video is where the
+photographic miniature look lands; the comic keeps the honest flat-vector fill.
 
 ## 2. Palette
 
@@ -161,6 +174,11 @@ Rules the library enforces:
 A clean 16:9 keyframe is composed in this fixed order:
 
 1. sky → 2. ground → 3. town buildings → 4. path → 5. props → 6. characters.
+
+The keyword→preset mapping below is the **AniDoodle keyframe/fallback** vocabulary.
+The H3 video path does not use it — it passes the storyboard's free-text
+`camera`, `action` and `scene_setting` (plus the code-injected tilt-shift style
+block) straight into the image-to-video prompt, keyed off each shot's keyframe.
 
 The storyboard's free-text `camera` and `action` are **mapped deterministically
 by code** to a small bounded set of presets (the full mapping is T023's

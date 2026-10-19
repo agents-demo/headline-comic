@@ -27,7 +27,7 @@
     "shot": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["shot_id", "beat", "source_ref", "characters", "camera", "action", "narration", "duration_s", "comic_panel"],
+      "required": ["shot_id", "beat", "source_ref", "characters", "camera", "action", "narration", "duration_s", "comic_panel", "gag", "scene_setting", "audio_cue"],
       "properties": {
         "shot_id": {"type": "string", "minLength": 1},
         "beat": {"type": "integer", "minimum": 0, "maximum": 5},
@@ -39,7 +39,10 @@
         "dialogue": {"type": "string"},
         "comic_caption": {"type": "string", "minLength": 1},
         "duration_s": {"type": "number", "minimum": 4, "maximum": 8},
-        "comic_panel": {"type": "boolean"}
+        "comic_panel": {"type": "boolean"},
+        "gag": {"type": "string", "minLength": 1},
+        "scene_setting": {"type": "string", "minLength": 1},
+        "audio_cue": {"type": "string", "minLength": 1}
       },
       "oneOf": [
         {"properties": {"beat": {"const": 0}, "source_ref": {"const": 0}}, "required": ["beat", "source_ref"]},

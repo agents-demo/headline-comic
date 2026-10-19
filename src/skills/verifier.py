@@ -130,7 +130,7 @@ def _format_storyboard(storyboard: Mapping[str, object]) -> str:
         if not isinstance(shot, Mapping):
             continue
         parts = [f"{shot.get('shot_id')} (beat {shot.get('beat')}):"]
-        for field in ("narration", "dialogue", "comic_caption", "action"):
+        for field in ("narration", "dialogue", "comic_caption", "action", "gag", "scene_setting", "audio_cue"):
             value = str(shot.get(field) or "").strip()
             if value:
                 parts.append(f"- {field}: {value}")

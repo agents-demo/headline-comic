@@ -16,6 +16,8 @@ from src.skills.checks import (
     check_citations,
     check_storyboard_characters,
     check_storyboard_duration,
+    check_storyboard_fields,
+    check_storyboard_gag,
     check_storyboard_narration,
     check_storyboard_panels,
     ledger_names,
@@ -82,7 +84,7 @@ class NameMatchTests(unittest.TestCase):
 class RunChecksTests(unittest.TestCase):
     def test_all_checks_pass_on_fixture(self) -> None:
         checks = run_checks(_ledger(), _summaries(), _story(), _storyboard())
-        self.assertEqual(len(checks), 12)
+        self.assertEqual(len(checks), 14)
         self.assertTrue(all(check.passed for check in checks), [c.message for c in checks if not c.passed])
         self.assertTrue(build_checks_document(checks)["passed"])
 
@@ -157,6 +159,30 @@ class StoryboardCheckTests(unittest.TestCase):
             shot["duration_s"] = 4
         self.assertFalse(check_storyboard_duration(storyboard).passed)
 
+    def test_gag_pass(self) -> None:
+        self.assertTrue(check_storyboard_gag(_storyboard()).passed)
+
+    def test_gag_missing_device_fails(self) -> None:
+        storyboard = copy.deepcopy(_storyboard())
+        storyboard["shots"][0]["gag"] = "a joke with no device label"
+        self.assertFalse(check_storyboard_gag(storyboard).passed)
+
+    def test_gag_missing_one_device_fails(self) -> None:
+        storyboard = copy.deepcopy(_storyboard())
+        # Replace every "Scale Contrast" gag so one device disappears.
+        for shot in storyboard["shots"]:
+            if shot["gag"].startswith("Scale Contrast:"):
+                shot["gag"] = "Absurd Literalization:" + shot["gag"].split(":", 1)[1]
+        self.assertFalse(check_storyboard_gag(storyboard).passed)
+
+    def test_fields_pass(self) -> None:
+        self.assertTrue(check_storyboard_fields(_storyboard()).passed)
+
+    def test_fields_missing_audio_cue_fails(self) -> None:
+        storyboard = copy.deepcopy(_storyboard())
+        storyboard["shots"][0]["audio_cue"] = ""
+        self.assertFalse(check_storyboard_fields(storyboard).passed)
+
 
 class CitationCheckTests(unittest.TestCase):
     def test_valid_citations_pass(self) -> None:
@@ -195,7 +221,7 @@ class SaveAndRunTests(unittest.TestCase):
             jsonschema.Draft202012Validator(schema).validate(result["document"])
 
             written = json.loads((root / "runs" / "r1" / "checks.json").read_text(encoding="utf-8"))
-            self.assertEqual(len(written["checks"]), 12)
+            self.assertEqual(len(written["checks"]), 14)
 
     def test_save_refuses_overwrite(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

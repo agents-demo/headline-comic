@@ -30,13 +30,16 @@ BEAT_COUNT = 6
 _SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schemas" / "story.schema.json"
 
 _SYSTEM_PROMPT = (
-    "You are the Writer for a family-friendly comic. Turn five neutral news summaries into one "
-    "short fictional story set in a little town, told through its three recurring characters: "
-    "courier, mayor, and pigeon. Use only these characters and the little town; do not add real "
-    "people, and never use a real person's full name or surname. Write fiction, not reporting: "
-    "do not imply that one real news event caused another. Beat 0 introduces the town and the "
-    "situation with no news source. Beats 1 through 5 are inspired, in order, by sources 1 "
-    "through 5, and beat 5 closes the story warmly. "
+    "You are the Writer for a family-friendly miniature-world comic. Turn five neutral news "
+    "summaries into one short, gently comic fictional story set in a 1-inch toy town, anchored "
+    "by its tiny mayor — the recurring protagonist. Use only these characters and the little "
+    "town: courier, mayor, and pigeon; do not add real people, and never use a real person's "
+    "full name or surname. Write fiction, not reporting: do not imply that one real news event "
+    "caused another. Shape the six beats as a small comedic arc: beat 0 introduces the town and "
+    "the tiny mayor with no news source; beats 1 and 2 each turn one headline into a small comic "
+    "problem (rising trouble); beats 3 and 4 stack the problems until the town is overwhelmed; "
+    "beat 5 closes on a warm, funny resolution or punchline. Beats 1 through 5 are inspired, in "
+    "order, by sources 1 through 5. "
     'Reply with one JSON object: {"title": "...", "beats": [{"text": "..."}, {"text": "..."}, '
     '{"text": "..."}, {"text": "..."}, {"text": "..."}, {"text": "..."}]}. '
     "Exactly six beats. Keep each beat to 25 words or fewer and suitable for all ages."

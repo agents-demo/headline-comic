@@ -9,12 +9,14 @@ import jsonschema
 
 from src.providers.llm import ChatResult
 from src.skills.storyboard import (
+    GAG_DEVICES,
     MAX_SHOTS,
     MIN_SHOTS,
     StoryboardError,
     _coerce_duration,
     _normalize_characters,
     build_storyboard,
+    gag_device,
     run,
     save_storyboard,
     validate_storyboard,
@@ -34,6 +36,10 @@ def _story() -> dict:
     }
 
 
+def _gag(device: str, beat: int) -> str:
+    return f"{device}: the visual joke for beat {beat}."
+
+
 def _raw_shots() -> dict:
     shots = []
     for beat in range(6):
@@ -46,6 +52,9 @@ def _raw_shots() -> dict:
             "comic_caption": f"Caption {beat}",
             "duration_s": 5,
             "comic_panel": True,
+            "gag": _gag(GAG_DEVICES[beat % len(GAG_DEVICES)], beat),
+            "scene_setting": f"Miniature scene for beat {beat}.",
+            "audio_cue": f"Soundscape for beat {beat}.",
         })
     shots.append({
         "beat": 1,
@@ -55,6 +64,9 @@ def _raw_shots() -> dict:
         "narration": "Extra one.",
         "duration_s": 5,
         "comic_panel": False,
+        "gag": "Scale Contrast: an extra transition gag.",
+        "scene_setting": "A tracking miniature street.",
+        "audio_cue": "Soft footsteps.",
     })
     shots.append({
         "beat": 4,
@@ -64,6 +76,9 @@ def _raw_shots() -> dict:
         "narration": "Extra two.",
         "duration_s": 5,
         "comic_panel": False,
+        "gag": "Relatable Exaggeration: an overblown reaction.",
+        "scene_setting": "A close-up toy street corner.",
+        "audio_cue": "A cheerful sigh.",
     })
     return {"shots": shots}
 
@@ -106,6 +121,17 @@ class CharactersTests(unittest.TestCase):
         self.assertEqual(_normalize_characters([], ["courier", "mayor", "pigeon"]), ["courier"])
 
 
+class GagDeviceTests(unittest.TestCase):
+    def test_recognises_each_device_prefix(self) -> None:
+        for device in GAG_DEVICES:
+            self.assertEqual(gag_device(f"{device}: a joke"), device)
+
+    def test_rejects_unprefixed_or_unknown(self) -> None:
+        self.assertIsNone(gag_device("A joke without a device."))
+        self.assertIsNone(gag_device(""))
+        self.assertIsNone(gag_device("Slapstick: a different device"))
+
+
 class BuildStoryboardTests(unittest.TestCase):
     def test_injects_ids_and_source_refs(self) -> None:
         storyboard = build_storyboard(_raw_shots())
@@ -139,9 +165,12 @@ class BuildStoryboardTests(unittest.TestCase):
                 "narration": f"n {beat}",
                 "duration_s": 5,
                 "comic_panel": True,
+                "gag": _gag(GAG_DEVICES[beat % len(GAG_DEVICES)], beat),
+                "scene_setting": "a miniature scene",
+                "audio_cue": "a soundscape",
             })
-        raw["shots"].append({"beat": 1, "camera": "track", "action": "x", "narration": "e1", "duration_s": 5, "comic_panel": False})
-        raw["shots"].append({"beat": 4, "camera": "close", "action": "y", "narration": "e2", "duration_s": 5, "comic_panel": False})
+        raw["shots"].append({"beat": 1, "camera": "track", "action": "x", "narration": "e1", "duration_s": 5, "comic_panel": False, "gag": "Scale Contrast: a gag", "scene_setting": "s", "audio_cue": "a"})
+        raw["shots"].append({"beat": 4, "camera": "close", "action": "y", "narration": "e2", "duration_s": 5, "comic_panel": False, "gag": "Absurd Literalization: a gag", "scene_setting": "s", "audio_cue": "a"})
         storyboard = build_storyboard(raw)
         for shot in storyboard["shots"]:
             if shot["comic_panel"]:
@@ -170,11 +199,38 @@ class BuildStoryboardTests(unittest.TestCase):
         with self.assertRaises(StoryboardError):
             build_storyboard(raw)
 
+    def test_missing_gag_raises(self) -> None:
+        raw = _raw_shots()
+        del raw["shots"][0]["gag"]
+        with self.assertRaises(StoryboardError):
+            build_storyboard(raw)
+
+    def test_unlabelled_gag_raises(self) -> None:
+        raw = _raw_shots()
+        raw["shots"][0]["gag"] = "a joke with no device prefix"
+        with self.assertRaises(StoryboardError):
+            build_storyboard(raw)
+
+    def test_missing_scene_setting_raises(self) -> None:
+        raw = _raw_shots()
+        del raw["shots"][0]["scene_setting"]
+        with self.assertRaises(StoryboardError):
+            build_storyboard(raw)
+
     def test_uncovered_beat_raises(self) -> None:
         # 8 shots across beats 0-4 only, leaving beat 5 uncovered.
         shots = []
         for i in range(MIN_SHOTS):
-            shots.append({"beat": i % 5, "camera": "w", "action": "a", "narration": "n", "duration_s": 5})
+            shots.append({
+                "beat": i % 5,
+                "camera": "w",
+                "action": "a",
+                "narration": "n",
+                "duration_s": 5,
+                "gag": _gag(GAG_DEVICES[i % len(GAG_DEVICES)], i),
+                "scene_setting": "s",
+                "audio_cue": "a",
+            })
         with self.assertRaises(StoryboardError):
             build_storyboard({"shots": shots})
 

@@ -227,3 +227,23 @@ override), and the approve gate stays human.
 |--------|-------|
 | LLM curation ranks and picks the 5 stories, writing `curation.json` (T048) | FR-001, FR-007; tasks.md |
 | Pipeline S2 auto-curates when no human ids are supplied | FR-007; tasks.md |
+
+Revision 7 (2026-10-19) makes the storyboard funny and H3-ready (T049). The
+Writer now shapes the six beats as a small comedic arc anchored by the mayor
+("The Tiny Mayor"): beat 0 introduces the town with no news source, beats 1-2
+raise a comic problem per headline, beats 3-4 stack the problems until the town
+is overwhelmed, and beat 5 closes on a warm punchline. The Director rewrites each
+beat into a visual gag using exactly one of three comedic devices — **Scale
+Contrast**, **Absurd Literalization**, **Relatable Exaggeration** — and each shot
+gains three H3-oriented fields: `gag` (the labelled visual joke), `scene_setting`
+(the miniature scene and its prop) and `audio_cue` (the soundscape plus any spoken
+line). A new deterministic check requires every shot to carry a labelled gag and
+all three devices to appear across the run. This readies the storyboard for the
+MiniMax-H3 generative video path (T043) without changing today's renderers.
+
+| Change | Where |
+|--------|-------|
+| Writer: comedic arc with the mayor as anchor | FR-005 |
+| Director: per-shot `gag`/`scene_setting`/`audio_cue` + three comedic devices | FR-016 |
+| Deterministic gag check (every shot labelled, all three devices used) | FR-006, FR-016 |
+| Style bible: two-renderer look (H3 tilt-shift + AniDoodle fallback) | docs/style-bible.md |

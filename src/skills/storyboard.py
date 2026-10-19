@@ -30,20 +30,35 @@ MAX_SHOTS = 10
 MIN_DURATION_S = 4.0
 MAX_DURATION_S = 8.0
 
+# The three comedic devices the Director may use (the presenter's protocol, Step 2).
+# A shot's ``gag`` must open with ``"<Device>: "``; the deterministic check in
+# ``src/skills/checks.py`` reuses :func:`gag_device` to validate it.
+GAG_DEVICES = ("Scale Contrast", "Absurd Literalization", "Relatable Exaggeration")
+
 _SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schemas" / "storyboard.schema.json"
 
 _SYSTEM_PROMPT = (
-    "You are the Director for a family-friendly comic and short video. Turn the six story beats "
-    "into a storyboard of 8 to 10 shots. Use only the fixed cast (courier, mayor, pigeon) and at "
-    "most two characters per shot. For each shot give: beat (0-5), characters, camera, action, "
-    "narration, optional dialogue, optional comic_caption, duration_s (4 to 8), and comic_panel "
-    "(true or false). Exactly one shot per beat 0-5 must be a comic panel. Beat 0 is the intro. "
-    "Keep narration to at most two words per second of its shot, and make the shot durations sum "
-    "to between 37 and 51 seconds. Keep each action to 15 words or fewer, each narration to 12 "
-    "words or fewer, and each dialogue or comic_caption to 10 words or fewer. Do not use real names. "
-    'Reply with one JSON object: {"shots": [{"beat": 0, "characters": ["courier"], "camera": "...", '
-    '"action": "...", "narration": "...", "dialogue": "...", "comic_caption": "...", '
-    '"duration_s": 5, "comic_panel": true}, ...]}.'
+    "You are the Lead Animation Director for a miniature tilt-shift comedy: a 1-inch toy "
+    "diorama filmed with a macro lens (shallow depth of field, soft top-and-bottom bokeh blur), "
+    "in the spirit of Love, Death & Robots' 'Night of the Mini Dead'. Characters are plastic or "
+    "clay figurines with oversized round eyes and glossy surfaces. Turn the six story beats into "
+    "a storyboard of 8 to 10 shots. Use only the fixed cast (courier, mayor, pigeon) and at most "
+    "two characters per shot; the mayor is the tiny anchor. For every shot pick exactly one "
+    "comedic device — Scale Contrast, Absurd Literalization, or Relatable Exaggeration — and turn "
+    "the beat's news into a visual gag. For each shot give: beat (0-5), characters, camera, "
+    "action, narration, optional dialogue, optional comic_caption, duration_s (4 to 8), "
+    "comic_panel (true or false), gag (start with '<Device>: ' then the visual joke), "
+    "scene_setting (the miniature scene and its prop), and audio_cue (the soundscape plus any "
+    "spoken line inside <d>...</d> tags). Exactly one shot per beat 0-5 must be a comic panel. "
+    "Beat 0 is the intro. Keep narration to at most two words per second of its shot, and make "
+    "the shot durations sum to between 37 and 51 seconds. Keep each action, gag, or scene_setting "
+    "to 15 words or fewer, each narration to 12 words or fewer, each dialogue or comic_caption "
+    "to 10 words or fewer, and each audio_cue to 20 words or fewer. Use at least one gag of each "
+    "device across the storyboard. Do not use real names. "
+    'Reply with one JSON object: {"shots": [{"beat": 0, "characters": ["courier"], "camera": '
+    '"...", "action": "...", "narration": "...", "dialogue": "...", "comic_caption": "...", '
+    '"duration_s": 5, "comic_panel": true, "gag": "Scale Contrast: ...", "scene_setting": "...", '
+    '"audio_cue": "..."}, ...]}.'
 )
 
 
@@ -108,6 +123,20 @@ def _normalize_characters(value: object, cast: Sequence[str]) -> list[str]:
     return result
 
 
+def gag_device(gag: str) -> str | None:
+    """Return the comedic device a gag opens with, or ``None`` when it has none.
+
+    A valid gag starts ``"<Device>: "`` for exactly one of :data:`GAG_DEVICES`.
+    Shared with ``src/skills/checks.py`` so the deterministic check and the
+    Director's normalisation agree on the vocabulary.
+    """
+    text = (gag or "").strip()
+    for device in GAG_DEVICES:
+        if text.startswith(f"{device}:"):
+            return device
+    return None
+
+
 def _normalize_shot(raw: object, cast: Sequence[str]) -> dict:
     if not isinstance(raw, Mapping):
         raise StoryboardError("each shot must be an object")
@@ -119,6 +148,18 @@ def _normalize_shot(raw: object, cast: Sequence[str]) -> dict:
     if not camera or not action:
         raise StoryboardError("each shot needs a camera and an action")
 
+    gag = str(raw.get("gag") or "").strip()
+    if not gag or gag_device(gag) is None:
+        raise StoryboardError(
+            f"shot {raw.get('shot_id', '?')} needs a gag prefixed with one of {', '.join(GAG_DEVICES)}"
+        )
+    scene_setting = str(raw.get("scene_setting") or "").strip()
+    if not scene_setting:
+        raise StoryboardError(f"shot {raw.get('shot_id', '?')} needs a scene_setting")
+    audio_cue = str(raw.get("audio_cue") or "").strip()
+    if not audio_cue:
+        raise StoryboardError(f"shot {raw.get('shot_id', '?')} needs an audio_cue")
+
     shot: dict = {
         "beat": beat,
         "characters": _normalize_characters(raw.get("characters"), cast),
@@ -127,6 +168,9 @@ def _normalize_shot(raw: object, cast: Sequence[str]) -> dict:
         "narration": str(raw.get("narration") or "").strip(),
         "duration_s": _coerce_duration(raw.get("duration_s")),
         "comic_panel": bool(raw.get("comic_panel")),
+        "gag": gag,
+        "scene_setting": scene_setting,
+        "audio_cue": audio_cue,
     }
     dialogue = str(raw.get("dialogue") or "").strip()
     if dialogue:
@@ -181,6 +225,9 @@ def build_storyboard(
             "narration": shot["narration"],
             "duration_s": shot["duration_s"],
             "comic_panel": is_panel,
+            "gag": shot["gag"],
+            "scene_setting": shot["scene_setting"],
+            "audio_cue": shot["audio_cue"],
         }
         if shot.get("dialogue"):
             final["dialogue"] = shot["dialogue"]

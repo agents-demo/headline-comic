@@ -290,6 +290,43 @@ class AssembleTests(unittest.TestCase):
                 run=fake,
             )
 
+    def test_assemble_native_audio_replaces_tts_narration(self) -> None:
+        native = {
+            "shot-01": self.root / "clip-01.mp4",
+            "shot-02": self.root / "clip-02.mp4",
+        }
+        for path in native.values():
+            path.write_bytes(b"mp4")
+
+        fake = _FakeRun(duration=17.5)
+        assemble(
+            timeline_=timeline(STORYBOARD),
+            storyboard=STORYBOARD,
+            video_path=self.root / "shots.mp4",
+            clips=None,
+            bed_path=self.root / "bed.wav",
+            cards_dir=self.root / "cards",
+            story=STORY,
+            cards=CARDS,
+            final_path=self.root / "video.mp4",
+            repo_root=self.root,
+            native_audio=native,
+            run=fake,
+        )
+        # The mix step should feed the two native clips (delayed to their shot starts)
+        # into the sidechain duck, not any TTS clip.
+        audio_calls = [
+            c for c in fake.calls
+            if os.path.basename(c[0]).startswith("ffmpeg") and any("sidechaincompress" in a for a in c)
+        ]
+        self.assertEqual(len(audio_calls), 1)
+        call = audio_calls[0]
+        inputs = [call[i + 1] for i, a in enumerate(call) if a == "-i"]
+        self.assertEqual(inputs, [str(native["shot-01"]), str(native["shot-02"]), str(self.root / "bed.wav")])
+        fc = call[call.index("-filter_complex") + 1]
+        self.assertIn("[0:a]adelay=3000:all=1[a0]", fc)
+        self.assertIn("[1:a]adelay=7500:all=1[a1]", fc)
+
 
 class RunAssemblerTests(unittest.TestCase):
     def setUp(self) -> None:

@@ -30,6 +30,7 @@ from src.permissions.media_guard import (
 )
 from src.providers.contracts import VideoRequest, VideoResult
 from src.skills.image_gen import scene_spec
+from src.skills.video_recovery import run as run_recovery
 
 MAX_DURATION_S = 59.0  # strictly under one minute (FR-010)
 
@@ -148,4 +149,84 @@ def run(
 
     actual = video_price.usd_per_unit * len(specs)
     record_actual_cost(workspace_root=root, run_id=run_id, category="video", actual_usd=actual)
+    return result
+
+
+def run_h3(
+    story: Mapping[str, Any],
+    storyboard: Mapping[str, Any],
+    candidates: Mapping[str, Any],
+    summaries: Mapping[str, Any],
+    *,
+    provider: Any,
+    workspace_root: Path,
+    run_id: str,
+    unit_prices: Mapping[str, UnitPrice],
+    clips: Sequence[Any] | None = None,
+    holds: Mapping[str, float] | None = None,
+    ledger: Mapping[str, Any] | None = None,
+    bed_path: Path | None = None,
+    max_attempts: int = 2,
+    approval_path: Path | None = None,
+) -> Path:
+    """Render each shot through MiniMax-H3 (native audio) and assemble the video (T043).
+
+    The H3 provider is self-hosted, so the video line is reserved at $0 and no T007
+    approval record is required. The provider's per-shot ``renderer`` feeds the shared
+    recovery seam (retry-once + animated-still swap), and the recovered clips' native
+    audio replaces the TTS narration in assembly — the music bed is ducked under it.
+    """
+    root = workspace_root.resolve()
+    video_price = unit_prices.get("video")
+    if video_price is None:
+        raise MissingUnitPrice("No recorded unit price for video calls")
+
+    run_dir = root / "runs" / run_id
+    require_allowed_write_path(run_dir / "video_scenes.ts", workspace_root=root)
+
+    # Reserve the video line once, mirroring the AniDoodle path: reuse the image
+    # stage's quote when present, otherwise reserve a video-only quote.
+    cost_path = run_dir / "cost.json"
+    if cost_path.exists():
+        record = json.loads(cost_path.read_text(encoding="utf-8"))
+        items = record.get("items") if isinstance(record, dict) else None
+        if not isinstance(items, list) or not any(
+            isinstance(item, dict) and item.get("category") == "video" for item in items
+        ):
+            raise CostRecordError(
+                "run cost record lacks a video line; reserve the image and video quote together"
+            )
+    else:
+        prepare_storyboard_quote(
+            storyboard,
+            unit_prices,
+            workspace_root=root,
+            run_id=run_id,
+            planned_categories=["video"],
+        )
+
+    if video_price.usd_per_unit > 0:
+        if approval_path is None:
+            raise ApprovalRequired("Paid video generation requires an approval record")
+        require_approval(action="video", approval_path=approval_path, run_id=run_id)
+
+    render = provider.renderer(storyboard, run_dir / "keyframes")
+    result = run_recovery(
+        story,
+        storyboard,
+        candidates,
+        summaries,
+        workspace_root=root,
+        run_id=run_id,
+        render=render,
+        clips=clips,
+        holds=holds,
+        ledger=ledger,
+        bed_path=bed_path,
+        native_audio=True,
+    )
+
+    shots = storyboard.get("shots")
+    count = len(shots) if isinstance(shots, list) else 0
+    record_actual_cost(workspace_root=root, run_id=run_id, category="video", actual_usd=video_price.usd_per_unit * count)
     return result

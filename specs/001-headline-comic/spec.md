@@ -91,7 +91,7 @@ Every run also produces fallback.mp4 (animated stills). If video generation fail
 - **FR-007** Human gates. (a) Pick exactly 5 headlines — a human pick by default, or the automatic LLM curation step (Step 3) that ranks the candidate pool by newsworthiness and writes `curation.json`. (b) Approve the script and storyboard with the cost estimate: approve, edit, or reject. After an edit the code checks and the Verifier run again, as in US3.
 - **FR-008** Fixed cast and town. Three characters and the town are defined in the style bible. For each character there is one sheet image showing four views (front, three-quarter, side, back), and there is one town reference image. They are generated once for the project, the best are chosen by hand, and they are stored in `assets/cast/`. They are not regenerated during a run.
 - **FR-009** Keyframes and comic. Generate one clean 16:9 keyframe per shot, with no text in the image, using the cast sheets and the town reference. The comic page uses the six keyframes flagged as comic panels (one per beat) in a 2-column, 3-row layout. Captions, bubbles and source markers are composited by code on copies; the clean keyframes are kept for the video.
-- **FR-010** Video. 8-10 shots of 4-8 s each, image-to-video from each shot's keyframe, generated in parallel up to the provider's limit. Audio from the video model is discarded. Assemble with ffmpeg: transitions, subtitles (the narration text), narration (TTS), music bed, title card (3 s) and closing "Based on: 5 sources" card (5 s). Total running time is 45-59 s including the cards, strictly under one minute. Transitions fit within shot durations. If a narration clip is longer than its shot, the shot's last frame is held to fit, within the 59 s total.
+- **FR-010** Video. 8-10 shots of 4-8 s each, image-to-video from each shot's keyframe, generated in parallel up to the provider's limit. When the video model generates native audio (MiniMax-H3), that dialogue/sfx is kept and the music bed is sidechain-ducked under it, with TTS narration as the fallback-only voice; when the model's audio is unavailable it is discarded and TTS carries the narration. Assemble with ffmpeg: transitions, subtitles (the narration text), narration (TTS fallback), music bed, title card (3 s) and closing "Based on: 5 sources" card (5 s). Total running time is 45-59 s including the cards, strictly under one minute. Transitions fit within shot durations. If a narration clip is longer than its shot, the shot's last frame is held to fit, within the 59 s total.
 - **FR-011** Run-level artifact folder: `runs/<date-time>/` with candidates.json, article_text/, ledger.json, summaries.md, story.json, storyboard.json, checks.json, keyframes/ (clean), panels/ (with text), audio/, shots/, comic.png, fallback.mp4, video.mp4, cost.json, run.log (stage timings, cost, approvals and overrides).
 - **FR-012** Cost guard. Before generation, estimate the run's cost from the storyboard and the unit prices measured in the spike, and show it at the approval gate. Hard stop with a message before exceeding the per-run budget (default 25 USD, to be re-set after the spike). The guard covers image, video and TTS calls. LLM tokens are capped separately by the Swarmflow token budget and logged. Tavily credits are logged too; a run uses about 1-5 credits against a free allowance of 1,000 a month, so they are tracked but not budgeted in currency. A project budget across all runs is also tracked (provisional 300 USD: 8 rehearsal runs at up to 25 USD plus about 100 USD for development; re-set after the spike).
 - **FR-013** Label. "AI-generated fiction" appears as a small mark on every video frame, in the comic footer, on the closing card and in the file metadata.
@@ -247,3 +247,21 @@ MiniMax-H3 generative video path (T043) without changing today's renderers.
 | Director: per-shot `gag`/`scene_setting`/`audio_cue` + three comedic devices | FR-016 |
 | Deterministic gag check (every shot labelled, all three devices used) | FR-006, FR-016 |
 | Style bible: two-renderer look (H3 tilt-shift + AniDoodle fallback) | docs/style-bible.md |
+
+Revision 8 (2026-10-19) lands the MiniMax-H3 video provider and native audio (T043).
+`src/providers/minimax_h3.py` is a self-hosted, per-shot image-to-video adapter that
+feeds each shot's AniDoodle keyframe to MiniMax-H3 (Hailuo 3.0) as the first frame of
+an `fl2va` request over SGLang's HTTP API, and returns a 1280x720/24fps clip with the
+model's native stereo audio. The provider is self-hosted, so it records a $0 `video`
+line and needs no T007 approval record. `video_recovery.run(..., native_audio=True)`
+reuses the retry-once + animated-still seam and hands the generated clips to the
+assembler, which sidechain-ducks the music bed under the native audio instead of the
+TTS narration; the Fish Audio path remains as the fallback voice, and AniDoodle
+remains the still keyframe/comic/fallback renderer (D10, FR-009).
+
+| Change | Where |
+|--------|-------|
+| FR-010: generated video uses the video model's native audio (bed ducked under it); TTS becomes the fallback voice | FR-010, FR-017 |
+| MiniMax-H3 fl2va provider + $0 video line (no T007 approval) | FR-009, FR-010, FR-014; tasks.md T043 |
+| Native-audio assembly (sidechain-duck the bed under H3 audio) | FR-010; tasks.md |
+| H3 contract + env vars recorded | docs/api-notes.md |

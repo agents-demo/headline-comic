@@ -23,6 +23,7 @@ from typing import Any, Callable, Mapping, Sequence
 
 from src.flow.runlog import append_entry, log_entry
 from src.permissions.media_guard import require_allowed_write_path
+from src.providers.contracts import ShotRenderResult
 from src.skills.assemble import VIDEO_H, VIDEO_W, _find_tool, run as run_assembler
 from src.skills.fallback_gen import fallback_filter
 from src.skills.image_gen import scene_spec
@@ -36,16 +37,6 @@ _TIMEOUT_ERRORS = (TimeoutError, subprocess.TimeoutExpired)
 
 class ShotRecoveryError(RuntimeError):
     """Raised when a shot's recovery cannot complete (e.g. its still fails to render)."""
-
-
-@dataclass(frozen=True)
-class ShotRenderResult:
-    """The per-shot video provider's output: a clip and the checks we run on it."""
-
-    path: Path
-    duration_s: float
-    width: int
-    height: int
 
 
 @dataclass(frozen=True)
@@ -260,11 +251,18 @@ def run(
     holds: Mapping[str, float] | None = None,
     ledger: Mapping[str, Any] | None = None,
     bed_path: Path | None = None,
+    native_audio: bool = False,
     ffmpeg: str | None = None,
     run_process: Callable = subprocess.run,
 ) -> Path:
     """Leader recovery: render every shot (retry once), swap failures to stills,
-    concatenate the recovered footage, assemble ``runs/<run-id>/video.mp4`` (FR-017)."""
+    concatenate the recovered footage, assemble ``runs/<run-id>/video.mp4`` (FR-017).
+
+    With ``native_audio`` (T043), the generated clips' own audio replaces the TTS
+    narration in assembly — the music bed is ducked under the video model's native
+    dialogue/sfx instead. Stills (and any generated clip that degraded) simply carry
+    no audio, and the bed plays solo during those shots (FR-017).
+    """
     root = workspace_root.resolve()
     run_dir = root / "runs" / run_id
     shots_dir = require_allowed_write_path(run_dir / "shots", workspace_root=root)
@@ -316,5 +314,10 @@ def run(
         video_path=mixed,
         bed_path=bed_path,
         output_name="video.mp4",
+        native_audio=(
+            {outcome.shot_id: outcome.source_path for outcome in outcomes if outcome.kind == "generated"}
+            if native_audio
+            else None
+        ),
         run_process=run_process,
     )

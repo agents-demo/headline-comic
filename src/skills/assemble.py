@@ -434,6 +434,7 @@ def assemble(
     cards: Sequence[Mapping[str, Any]],
     final_path: Path,
     repo_root: Path,
+    native_audio: Mapping[str, Path] | None = None,
     run: Callable = subprocess.run,
 ) -> Path:
     """Render cards, then run the ffmpeg segment/concat/audio/mux steps and verify."""
@@ -458,10 +459,17 @@ def assemble(
         end_s = seg.start_s + seg.duration_s - TRANSITION_S
         subtitles.append((png, seg.start_s, max(seg.start_s, end_s)))
 
-    # narration audio: only spoken clips with an existing file, matched to shot start
+    # narration audio: only spoken clips with an existing file, matched to shot start.
+    # When the video model produced native audio (T043), its per-shot clips replace the
+    # TTS narration; the music bed is still ducked under whichever track is present.
     spoken = {clip.shot_id: clip for clip in (clips or []) if clip.spoken}
     narration: list[tuple[Path, float]] = []
     for seg in shots:
+        if native_audio is not None:
+            path = native_audio.get(seg.shot_id)
+            if path is not None and Path(path).is_file():
+                narration.append((Path(path), seg.start_s))
+            continue
         clip = spoken.get(seg.shot_id)
         if clip is not None and Path(clip.audio_path).is_file():
             narration.append((Path(clip.audio_path), seg.start_s))
@@ -551,6 +559,7 @@ def run(
     video_path: Path | None = None,
     bed_path: Path | None = None,
     output_name: str = "video.mp4",
+    native_audio: Mapping[str, Path] | None = None,
     run_process: Callable = subprocess.run,
 ) -> Path:
     """Assemble ``runs/<run-id>/<output_name>`` from a finished story, storyboard and sources."""
@@ -573,5 +582,6 @@ def run(
         cards=cards,
         final_path=final_path,
         repo_root=root,
+        native_audio=native_audio,
         run=run_process,
     )

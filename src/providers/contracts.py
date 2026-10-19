@@ -42,6 +42,16 @@ class VideoResult:
     has_audio: bool
 
 
+@dataclass(frozen=True)
+class ShotRenderResult:
+    """A per-shot video provider's output: the clip and the checks recovery runs on it."""
+
+    path: Path
+    duration_s: float
+    width: int
+    height: int
+
+
 @runtime_checkable
 class VideoProvider(Protocol):
     """Render a run's video through a local or remote implementation."""

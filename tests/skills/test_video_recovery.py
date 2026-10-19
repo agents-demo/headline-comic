@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 from src.flow.runlog import read_entries
 from src.skills.video_recovery import (
@@ -272,6 +273,26 @@ class RunRecoveryTests(unittest.TestCase):
         summary = [e for e in entries if e["event"] == "recovery_summary"]
         self.assertEqual(summary[0]["generated"], 1)
         self.assertEqual(summary[0]["stills"], 1)
+
+    def test_run_native_audio_passes_generated_clips_to_assembly(self) -> None:
+        fake = _FakeRun(duration=17.5)
+        render = _Renderer(_ok(), _ok(6.0))  # both shots generated -> both carry native audio
+        with mock.patch("src.skills.video_recovery.run_assembler") as assembler:
+            assembler.return_value = self.root / "runs" / "t031" / "video.mp4"
+            run_recovery(
+                STORY,
+                STORYBOARD,
+                self.candidates,
+                self.summaries,
+                workspace_root=self.root,
+                run_id="t031",
+                render=render,
+                run_process=fake,
+                native_audio=True,
+            )
+        kwargs = assembler.call_args.kwargs
+        self.assertEqual(set(kwargs["native_audio"]), {"shot-01", "shot-02"})
+        self.assertEqual(kwargs["native_audio"]["shot-01"], Path("clip.mp4"))
 
 
 if __name__ == "__main__":

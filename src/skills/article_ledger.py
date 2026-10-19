@@ -29,16 +29,17 @@ MAX_QUOTE_WORDS = 25
 Chat = Callable[[Sequence[tuple[str, str]]], ChatResult]
 
 _SYSTEM_PROMPT = (
-    "You extract a factual evidence ledger from a single news article. "
+    "You extract a concise factual evidence ledger from a single news article. "
     "Reply with one JSON object containing exactly these keys:\n"
-    '- "facts": a list of objects, each {"kind": one of "who","what","when","where", '
-    '"claim": a short factual claim, "support_span": the verbatim substring of the article that supports it}.\n'
-    '- "quotes": a list of objects, each {"text": a short direct quote of 25 words or fewer, '
+    '- "facts": at most 8 objects, each {"kind": one of "who","what","when","where", '
+    '"claim": a short factual claim of 20 words or fewer, "support_span": the verbatim substring of the article that supports it}.\n'
+    '- "quotes": at most 3 objects, each {"text": a short direct quote of 25 words or fewer, '
     '"support_span": the verbatim substring of the article containing it}.\n'
-    '- "people": a list of the full names of real individuals mentioned in the article.\n'
-    "Every support_span must be copied character-for-character from the article text. "
-    "Do not paraphrase, shorten or expand a span. If the article has no quotes or no named people, "
-    "return an empty list for that key."
+    '- "people": at most 5 of the full names of real individuals mentioned in the article.\n'
+    "Every support_span must be copied character-for-character from the article text and kept to "
+    "40 words or fewer. Do not paraphrase, shorten or expand a span. Prefer the few most important "
+    "facts; do not pad the ledger. If the article has no quotes or no named people, return an "
+    "empty list for that key."
 )
 
 

@@ -39,7 +39,7 @@ _SYSTEM_PROMPT = (
     "through 5, and beat 5 closes the story warmly. "
     'Reply with one JSON object: {"title": "...", "beats": [{"text": "..."}, {"text": "..."}, '
     '{"text": "..."}, {"text": "..."}, {"text": "..."}, {"text": "..."}]}. '
-    "Exactly six beats. Keep each beat to one or two sentences and suitable for all ages."
+    "Exactly six beats. Keep each beat to 25 words or fewer and suitable for all ages."
 )
 
 

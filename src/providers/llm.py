@@ -97,6 +97,7 @@ class DeepSeekChatProvider:
         *,
         json_mode: bool = False,
         temperature: float | None = 0.0,
+        max_tokens: int | None = None,
     ) -> ChatResult:
         if not self.api_key:
             raise ValueError("LLM_API_KEY is not set")
@@ -112,6 +113,8 @@ class DeepSeekChatProvider:
             payload["temperature"] = temperature
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
         return self._parse(self._post(payload))
 
     def _post(self, payload: dict) -> dict:

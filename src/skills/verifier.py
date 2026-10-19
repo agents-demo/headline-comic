@@ -51,7 +51,8 @@ _SYSTEM_PROMPT = (
     "summaries, the story and the storyboard. Judge these five items strictly and reply with one "
     'JSON object: {"items": [{"check_id": "...", "passed": true, "reason": "..."}]} with exactly '
     "these five check ids: verify-summaries, verify-causation, verify-real-people, verify-graphic, "
-    "verify-satire. If anything is wrong or doubtful, set passed=false and explain briefly."
+    "verify-satire. If anything is wrong or doubtful, set passed=false and explain briefly. "
+    "Reply with the JSON object only; keep each reason to one short sentence."
 )
 
 

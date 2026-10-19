@@ -182,3 +182,32 @@ candidate objects and writes `curation.json`.
 - The human pick-5 gate (`hitl.pick_stories`) is unchanged and still used when the
   caller supplies `selected_ids`; `TextPipeline` defaults to auto-curation when none
   are given.
+
+## Latency: reasoning tokens vs. generation model (2026-10-19)
+
+A per-call profiler (`scripts/prof_llm.py`, `TimingChat`) isolated the text half's
+latency to **decode-bound** output, and the raw DeepSeek reply revealed why:
+
+- `deepseek-v4-pro` (the model `.env` pointed `LLM_MODEL` at) emits a
+  **`reasoning_content`** field — chain-of-thought — *even in `json_mode`*. The
+  adapter (`src/providers/llm.py`) reads only `message.content` and discards that
+  field, but `usage.completion_tokens` still counts it
+  (`completion_tokens_details.reasoning_tokens`). On the France ledger call this was
+  6,709 completion tokens = ~1,000 of JSON + ~5,700 of discarded reasoning, ~85% of
+  the decode time wasted.
+- The same reasoning tokens count against `max_tokens`, so a tight cap on a reasoning
+  model truncates the chain-of-thought *before* the JSON is finished (the S6
+  storyboard and S8 verifier both broke at caps of 4096/3072 this way). This is why
+  prompt word-caps alone did not help: S6 ignored them, and the "cost" was hidden
+  reasoning, not the visible JSON.
+- `deepseek-chat` is served as a **non-reasoning** model (the API reports
+  `deepseek-flash`): no `reasoning_content`, `completion_tokens` equals the JSON only.
+  The generation stages (S3–S6) now run on it, cutting their critical path from
+  ~165 s to ~10 s (S3 France 72.4 s → 3.0 s, S6 93.2 s → 3.6 s).
+
+Resolution: `LLM_MODEL=deepseek-chat` for the generators (the original T011 design);
+the S8 Verifier stays on `deepseek-reasoner` via `LLM_VERIFIER_MODEL`, where the
+chain-of-thought is the point of the independent second opinion (and the earlier
+3072-token cap on it was removed so it is never truncated). The `max_tokens` parameter
+remains available on `DeepSeekChatProvider.complete` for callers that want it, but the
+skills no longer set a tight cap — the model choice, not a token cap, is the latency fix.

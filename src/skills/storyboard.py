@@ -39,7 +39,8 @@ _SYSTEM_PROMPT = (
     "narration, optional dialogue, optional comic_caption, duration_s (4 to 8), and comic_panel "
     "(true or false). Exactly one shot per beat 0-5 must be a comic panel. Beat 0 is the intro. "
     "Keep narration to at most two words per second of its shot, and make the shot durations sum "
-    "to between 37 and 51 seconds. Do not use real names. "
+    "to between 37 and 51 seconds. Keep each action to 15 words or fewer, each narration to 12 "
+    "words or fewer, and each dialogue or comic_caption to 10 words or fewer. Do not use real names. "
     'Reply with one JSON object: {"shots": [{"beat": 0, "characters": ["courier"], "camera": "...", '
     '"action": "...", "narration": "...", "dialogue": "...", "comic_caption": "...", '
     '"duration_s": 5, "comic_panel": true}, ...]}.'

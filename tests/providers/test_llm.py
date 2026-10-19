@@ -67,6 +67,32 @@ class DeepSeekChatProviderTests(unittest.TestCase):
         self.assertEqual(result.prompt_tokens, 10)
         self.assertEqual(result.completion_tokens, 5)
 
+    def test_complete_sends_max_tokens_when_set(self) -> None:
+        captured = {}
+
+        def fake_urlopen(req, timeout=None):
+            captured["body"] = json.loads(req.data)
+            return _FakeResponse(_ok_payload())
+
+        provider = DeepSeekChatProvider(
+            api_key="sk-test", base_url="https://api.deepseek.com", model="deepseek-chat", urlopen=fake_urlopen
+        )
+        provider.complete([("user", "hi")], max_tokens=2048)
+        self.assertEqual(captured["body"]["max_tokens"], 2048)
+
+    def test_complete_omits_max_tokens_by_default(self) -> None:
+        captured = {}
+
+        def fake_urlopen(req, timeout=None):
+            captured["body"] = json.loads(req.data)
+            return _FakeResponse(_ok_payload())
+
+        provider = DeepSeekChatProvider(
+            api_key="sk-test", base_url="https://api.deepseek.com", model="deepseek-chat", urlopen=fake_urlopen
+        )
+        provider.complete([("user", "hi")])
+        self.assertNotIn("max_tokens", captured["body"])
+
     def test_trailing_slash_in_base_url_is_normalised(self) -> None:
         provider = DeepSeekChatProvider(api_key="k", base_url="https://api.deepseek.com/", model="m")
         self.assertEqual(provider.endpoint, "https://api.deepseek.com/chat/completions")

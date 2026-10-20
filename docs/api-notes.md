@@ -72,50 +72,57 @@ The watermark also means free-tier renders are unsuitable for the polished demo.
 
 ## MiniMax-H3 (Hailuo 3.0) — self-hosted image-to-video + native audio (T043)
 
-Confirmed against the SGLang `minimax_h3` serving script and the MiniMax community
-checkpoint notes (checked 2026-10-19). No live call was made; the adapter is
-validated by a fake HTTP server in `tests/providers/test_minimax_h3.py`.
+**Corrected 2026-10-20.** The presenter's GPU server runs **vLLM-Omni**, not SGLang
+(the earlier SGLang contract below was wrong for the actual deployment). Confirmed
+against the vLLM-Omni recipe (`recipes/MiniMaxAI/MiniMax-H3`), the server launcher
+`minimax_h3/run_minimax_h3.sh`, and the benchmark `minimax_h3/benchmark_minimax_h3.py`.
+No live call was made; the adapter is validated by a fake HTTP server in
+`tests/providers/test_minimax_h3.py`.
 
-- **Checkpoints**: `FL2VA` (text / first-last-frame → video + audio) and `Ref2VA` (up
-  to 9 references), served as separate SGLang services. The adapter uses **FL2VA
-  first-frame image-to-video** — each shot's AniDoodle keyframe is the first frame so
-  comic and video stay visually pinned (FR-010, D10). `task` is `fl2va` (default) or
-  `ref2va`.
-- **HTTP**: `POST {base}/v1/videos` (async, returns a JSON job `id`) →
-  poll `GET {base}/v1/videos/{id}` for `status` (`pending`/`running`/`completed`/
-  `failed`) → `GET {base}/v1/videos/{id}/content` for the MP4 bytes.
-- **Request body** (confirmed shape):
-  ```json
-  {
-    "model": "MiniMaxAI/MiniMax-H3",
-    "prompt": "…",
-    "seconds": 5,
-    "task": "fl2va",
-    "conditions": [
-      {"type": "image", "uri": "file:///data/minimax-h3/<run>/keyframes/<shot>.png",
-       "role": "keyframe", "frame_index": 0}
-    ],
-    "target": {"short_edge": 768, "aspect_ratio": "16:9", "duration_seconds": 5},
-    "quality": "exact", "num_outputs_per_prompt": 1, "num_inference_steps": 50,
-    "flow_shift": 12.0, "audio_flow_shift": 3.0, "seed": 2101
-  }
-  ```
-  A keyframe condition's `uri` is a **server-visible `file://` URI** — not bytes,
-  base64, or a URL. For first-frame-only image-to-video keep a single keyframe
-  condition at `frame_index: 0` (`-1` for a last frame; `[0]`, `[-1]` or `[0,-1]` in
-  order are the allowed combinations).
-- **Output**: `target.short_edge 768` at 16:9 renders **1344×768** (dimensions are
-  ÷32), 24 fps, 4–15 s, H.264 + **native stereo AAC audio (32 kHz)**. The adapter
-  re-encodes to 1280×720/24fps/AAC-48k so the recovery resolution check and the
-  ffmpeg assembly run unchanged. 2K resolution is hosted-only (not local).
-- **Env vars** (`src/providers/minimax_h3.py`): `MINIMAX_H3_BASE_URL` (SGLang base,
-  default `http://127.0.0.1:30010`), `MINIMAX_H3_MODEL` (`MiniMaxAI/MiniMax-H3`),
-  `MINIMAX_H3_VARIANT` (`fl2va`), `MINIMAX_H3_MEDIA_BASE_URI`
-  (`file:///data/minimax-h3`), `MINIMAX_H3_SHORT_EDGE` (768),
-  `MINIMAX_H3_ASPECT_RATIO` (16:9), `MINIMAX_H3_NUM_INFERENCE_STEPS` (50).
-- **Deployment note**: the adapter computes the keyframe `file://` URI as
-  `MINIMAX_H3_MEDIA_BASE_URI/<run-id>/keyframes/<shot-id>.png`. The presenter must
-  bind-mount (or symlink) this repo's `runs/` directory at the server path behind
-  `MINIMAX_H3_MEDIA_BASE_URI` so SGLang can read each run's keyframes. Cost is $0 per
-  call (self-hosted), so the adapter records a $0 `video` line and requires no T007
-  approval record.
+- **Serving**: `vllm serve <checkpoint>/FL2VA --omni --task-type fl2va …` (see
+  `run_minimax_h3.sh`). `FL2VA` (text / first-last-frame → video + audio) and
+  `Ref2VA` (up to 9 references) are served as **separate partition subdirs** of the
+  same checkpoint, not the model root (the root's `modular_model_index.json` is
+  misread by vLLM-Omni's local loader). The adapter uses **FL2VA first-frame
+  image-to-video** — each shot's AniDoodle keyframe is the first frame so comic and
+  video stay visually pinned (FR-010, D10).
+- **HTTP**: `POST {base}/v1/videos/sync` — a **multipart/form-data** request that
+  returns the finished MP4 directly (HTTP 200, `Content-Type: video/mp4`). There is
+  also an async `POST /v1/videos`, but the recipe does not document its job-id or
+  polling schema, so the synchronous endpoint is the confirmed path (and what the
+  benchmark drives).
+- **Form fields**: `prompt` (text), `fps` (fixed 24), `num_inference_steps` (50),
+  `flow_shift` (12.0), `seed` (int), `extra_params` (a JSON string), and `width` /
+  `height` (multiples of 32) with an optional `aspect_ratio` (`16:9`).
+- **`extra_params` JSON**: `{"task":"fl2va","duration":<s>,"audio_flow_shift":3.0}`.
+  `task` is `fl2va` (default) or `ref2va`.
+- **Keyframe**: uploaded as the **`input_reference` file's bytes** (singular, one
+  first-frame image) — not a `file://` URI and not base64, so **no server-side mount
+  is required**. The plural `input_references` + `frame_indices` form is only for the
+  two-image first/last variant, which the adapter does not use.
+- **Output**: H.264 at 24 fps with **native stereo AAC audio (32 kHz)**. `duration` is
+  4–15 s, quantised to H3's `17n+5` frame schedule (~0.71 s granularity) — the
+  recovery's `DURATION_TOLERANCE_S = 0.25` may need review after the first live run.
+  The adapter requests 1024×576 (A6000-safe) and re-encodes to 1280×720/24fps/AAC-48k
+  so the recovery resolution check and the ffmpeg assembly run unchanged; 1344×768 is
+  the higher-quality 16:9 option on larger cards.
+- **Two gates** (`src/providers/minimax_h3.py`): `MiniMaxH3VideoProvider` (self-hosted
+  vLLM-Omni, $0, no key) is implemented; `MiniMaxH3CloudProvider` reserves a future
+  MiniMax-hosted cloud API (API key + URL) and raises until T007's guards exist and
+  the cost is approved. Both are selectable in `scripts/gate3.py --video`.
+- **Env vars**: `MINIMAX_H3_BASE_URL` (vLLM-Omni base, default `http://127.0.0.1:8000`;
+  the presenter's server is `http://10.10.12.102:8000`), `MINIMAX_H3_VARIANT`
+  (`fl2va`), `MINIMAX_H3_WIDTH`/`MINIMAX_H3_HEIGHT` (1024/576),
+  `MINIMAX_H3_ASPECT_RATIO` (16:9), `MINIMAX_H3_NUM_INFERENCE_STEPS` (50),
+  `MINIMAX_H3_FPS` (24), `MINIMAX_H3_FLOW_SHIFT` (12.0),
+  `MINIMAX_H3_AUDIO_FLOW_SHIFT` (3.0). Reserved cloud gate:
+  `MINIMAX_H3_API_URL`, `MINIMAX_H3_API_KEY`.
+- **Auth (optional)**: if the endpoint sits behind HTTP Basic auth, put the
+  credentials in `MINIMAX_H3_BASE_URL` as userinfo
+  (`http://batya:CODE@10.10.12.102:8000`) or set `MINIMAX_H3_USERNAME` /
+  `MINIMAX_H3_PASSWORD` separately. The adapter strips userinfo from the URL before
+  connecting and sends it as an `Authorization: Basic` header; percent-encoding in
+  the password (e.g. `%40` for `@`) is decoded. vLLM's own `--api-key` bearer-token
+  auth is a different scheme and is not wired.
+- **Cost**: $0 per call (self-hosted), so the adapter records a $0 `video` line and
+  requires no T007 approval record.

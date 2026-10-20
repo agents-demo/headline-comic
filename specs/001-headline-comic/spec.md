@@ -265,3 +265,19 @@ remains the still keyframe/comic/fallback renderer (D10, FR-009).
 | MiniMax-H3 fl2va provider + $0 video line (no T007 approval) | FR-009, FR-010, FR-014; tasks.md T043 |
 | Native-audio assembly (sidechain-duck the bed under H3 audio) | FR-010; tasks.md |
 | H3 contract + env vars recorded | docs/api-notes.md |
+
+Revision 9 (2026-10-20) corrects the MiniMax-H3 serving stack and adds the two-gate
+video path. The presenter's GPU server runs **vLLM-Omni**, not SGLang (Revision 8's
+"over SGLang's HTTP API" is superseded): the adapter now posts a `multipart/form-data`
+request to `POST {base}/v1/videos/sync` (returns the MP4 directly), uploads each
+shot's keyframe as the `input_reference` file's bytes (no `file://` mount), and reads
+`MINIMAX_H3_BASE_URL` (presenter server `http://10.10.12.102:8000`). `scripts/gate3.py`
+gains `--video anidoodle|minimax-h3|minimax-h3-cloud` so the self-hosted H3 gate and a
+reserved future MiniMax cloud gate (API key + URL, paid — blocked until T007) are both
+kept alongside the AniDoodle fallback.
+
+| Change | Where |
+|--------|-------|
+| H3 adapter: SGLang JSON → vLLM-Omni multipart `/v1/videos/sync` + `input_reference` bytes | `src/providers/minimax_h3.py`, `docs/api-notes.md` |
+| Two video gates kept: self-hosted H3 + reserved cloud (API key + URL) | `scripts/gate3.py --video`, `src/providers/minimax_h3.py` |
+| Server scripts debugged (venv path, duplicate `--num-gpus`, `resident --task-type`) | `minimax_h3/run_minimax_h3.sh` |

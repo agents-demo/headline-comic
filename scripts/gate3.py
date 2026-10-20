@@ -21,8 +21,15 @@ FR-017 path and the music bed still plays.
 Usage::
 
     PYTHONPATH=. .venv/Scripts/python.exe -m scripts.gate3 [--run-id gate3] \
+        [--video anidoodle|minimax-h3|minimax-h3-cloud] \
         [--skip-keyframes] [--skip-video] [--skip-music] [--skip-narration] \
         [--verify-only] [--force]
+
+``--video`` picks the generated-video renderer. ``anidoodle`` (default) renders the
+silent whole-run AniDoodle video with Fish Audio narration; ``minimax-h3`` renders
+each shot through the self-hosted vLLM-Omni MiniMax-H3 server (``MINIMAX_H3_BASE_URL``)
+with native audio ducked under the music bed; ``minimax-h3-cloud`` reserves the future
+MiniMax-hosted API-key + URL gate and raises until it is wired.
 
 ``--skip-video`` reuses an existing ``shots.mp4`` (the AniDoodle whole-run render
 is the slow step); ``--skip-music`` reuses an existing ``audio/bed.wav`` (which
@@ -47,6 +54,7 @@ from src.permissions.media_guard import UnitPrice
 from src.providers.anidoodle import AniDoodleVideoProvider
 from src.providers.anidoodle_image import AniDoodleImageProvider
 from src.providers.fishaudio import FishAudioProvider
+from src.providers.minimax_h3 import MiniMaxH3CloudProvider, MiniMaxH3VideoProvider
 from src.skills import (
     generate_keyframes,
     run_assembler,
@@ -56,6 +64,7 @@ from src.skills import (
     run_video_gen,
 )
 from src.skills.assemble import _find_tool
+from src.skills.video_gen import run_h3
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests" / "fixtures" / "t006-sample"
@@ -72,6 +81,14 @@ UNIT_PRICES = {
     "tts": UnitPrice.create("fishaudio", "1000_characters", "0"),
 }
 
+# The MiniMax-H3 gates reserve the video line under the H3 provider instead of
+# AniDoodle. Still $0 (self-hosted), so no T007 approval is required.
+H3_UNIT_PRICES = {
+    "image": UnitPrice.create("anidoodle", "keyframe", "0"),
+    "video": UnitPrice.create("minimax-h3", "shot", "0"),
+    "tts": UnitPrice.create("fishaudio", "1000_characters", "0"),
+}
+
 
 def _load(name: str) -> dict[str, Any]:
     return json.loads((FIXTURE / name).read_text(encoding="utf-8"))
@@ -81,7 +98,7 @@ def _run_dir(run_id: str) -> Path:
     return ROOT / "runs" / run_id
 
 
-def render_keyframes(storyboard: dict, run_id: str) -> None:
+def render_keyframes(storyboard: dict, run_id: str, *, unit_prices: dict | None = None) -> None:
     keyframes_dir = _run_dir(run_id) / "keyframes"
     shot_ids = [str(shot["shot_id"]) for shot in storyboard["shots"]]
     if all((keyframes_dir / f"{shot_id}.png").is_file() for shot_id in shot_ids):
@@ -94,7 +111,7 @@ def render_keyframes(storyboard: dict, run_id: str) -> None:
         provider=provider,
         workspace_root=ROOT,
         run_id=run_id,
-        unit_prices=UNIT_PRICES,
+        unit_prices=unit_prices or UNIT_PRICES,
         planned_categories=("image", "video", "tts"),
     )
 
@@ -141,6 +158,27 @@ def render_narration(storyboard: dict, run_id: str, *, provider=None, tts_runner
         workspace_root=ROOT,
         run_id=run_id,
         unit_prices={"tts": UNIT_PRICES["tts"]},
+    )
+
+
+def render_h3(story: dict, storyboard: dict, candidates: dict, summaries: dict, ledger: dict, run_id: str, *, provider) -> None:
+    out = _run_dir(run_id) / VIDEO_OUT
+    if out.is_file():
+        print(f"  generated:  already present ({VIDEO_OUT})")
+        return
+    print("  generated:  rendering MiniMax-H3 per-shot video (native audio) ...")
+    run_h3(
+        story,
+        storyboard,
+        candidates,
+        summaries,
+        provider=provider,
+        workspace_root=ROOT,
+        run_id=run_id,
+        unit_prices={"video": H3_UNIT_PRICES["video"]},
+        clips=[],
+        ledger=ledger,
+        bed_path=_run_dir(run_id) / "audio" / BED_NAME,
     )
 
 
@@ -256,6 +294,16 @@ def _print_report(report: dict[str, Any]) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Gate 3 validation: generated + fallback video from one run")
     parser.add_argument("--run-id", default="gate3", help="run directory name under runs/ (default %(default)s)")
+    parser.add_argument(
+        "--video",
+        choices=["anidoodle", "minimax-h3", "minimax-h3-cloud"],
+        default="anidoodle",
+        help=(
+            "video renderer: anidoodle (default, whole-run silent + TTS narration), "
+            "minimax-h3 (self-hosted vLLM-Omni on MINIMAX_H3_BASE_URL, native audio), "
+            "or minimax-h3-cloud (reserved future API-key + URL gate)"
+        ),
+    )
     parser.add_argument("--skip-keyframes", action="store_true", help="reuse existing keyframes instead of rendering")
     parser.add_argument("--skip-video", action="store_true", help="reuse existing shots.mp4 instead of the AniDoodle render")
     parser.add_argument("--skip-music", action="store_true", help="reuse existing audio/bed.wav instead of rendering")
@@ -276,24 +324,36 @@ def main(argv: list[str] | None = None) -> int:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     if not args.verify_only:
+        unit_prices = H3_UNIT_PRICES if args.video != "anidoodle" else UNIT_PRICES
         if args.skip_keyframes:
             print("keyframes: skipped (reusing existing)")
         else:
-            render_keyframes(storyboard, args.run_id)
-        if args.skip_video:
-            print("shots:     skipped (reusing existing shots.mp4)")
-        else:
-            render_shots(storyboard, args.run_id)
+            render_keyframes(storyboard, args.run_id, unit_prices=unit_prices)
         if args.skip_music:
             print("music:     skipped (reusing existing bed.wav)")
         else:
             render_bed(storyboard, args.run_id)
-        if args.skip_narration:
-            print("narration: skipped (subtitles-only)")
-            clips: list = []
+
+        if args.video == "anidoodle":
+            if args.skip_video:
+                print("shots:     skipped (reusing existing shots.mp4)")
+            else:
+                render_shots(storyboard, args.run_id)
+            if args.skip_narration:
+                print("narration: skipped (subtitles-only)")
+                clips: list = []
+            else:
+                clips = render_narration(storyboard, args.run_id)
+            assemble_generated(story, storyboard, candidates, summaries, ledger, args.run_id, clips=clips)
         else:
-            clips = render_narration(storyboard, args.run_id)
-        assemble_generated(story, storyboard, candidates, summaries, ledger, args.run_id, clips=clips)
+            provider = (
+                MiniMaxH3CloudProvider()
+                if args.video == "minimax-h3-cloud"
+                else MiniMaxH3VideoProvider()
+            )
+            render_h3(story, storyboard, candidates, summaries, ledger, args.run_id, provider=provider)
+            clips = []  # H3 native audio replaces TTS narration
+
         assemble_fallback(story, storyboard, candidates, summaries, ledger, args.run_id, clips=clips)
 
     report = verify_run(args.run_id, story)

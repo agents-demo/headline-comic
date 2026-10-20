@@ -1,25 +1,26 @@
 """MiniMax-H3 (Hailuo 3.0) image-to-video adapter with native audio (T043).
 
 MiniMax-H3 is the presenter's self-hosted 33B omni-modal video model, served over
-SGLang's HTTP video API. Confirmed against the SGLang ``minimax_h3`` serving script
-and the MiniMax community checkpoint notes (checked 2026-10-19):
+**vLLM-Omni** (not SGLang). Confirmed against the vLLM-Omni recipe
+(``recipes/MiniMaxAI/MiniMax-H3``), the server launcher ``minimax_h3/run_minimax_h3.sh``,
+and the benchmark ``minimax_h3/benchmark_minimax_h3.py`` (checked 2026-10-20):
 
-- ``POST {base}/v1/videos`` with body ``{model, prompt, seconds, task, conditions,
-  target, quality, num_outputs_per_prompt, num_inference_steps, flow_shift,
-  audio_flow_shift, seed}`` -> a JSON job id (async).
-- Poll ``GET {base}/v1/videos/{id}`` for ``status`` (``pending``/``running``/
-  ``completed``/``failed``); ``GET {base}/v1/videos/{id}/content`` -> the MP4 bytes.
-- ``task`` is ``fl2va`` (text / first-last-frame -> video) or ``ref2va``; we use
-  ``fl2va`` with a single first-frame keyframe condition so each shot's AniDoodle
-  keyframe pins the look (comic<->video alignment, FR-010).
-- A keyframe condition references a **server-visible** ``file://`` URI — not bytes,
-  base64, or a URL: ``{"type": "image", "uri": "file:///data/minimax-h3/<run>/
-  keyframes/<shot>.png", "role": "keyframe", "frame_index": 0}``. The presenter
-  mounts this repo's ``runs/`` directory at the server path behind
-  ``MINIMAX_H3_MEDIA_BASE_URI`` (default ``file:///data/minimax-h3``), so
-  ``runs/<run-id>/keyframes/<shot-id>.png`` is visible to SGLang.
-- ``target.short_edge 768`` at 16:9 renders 1344x768 (dimensions are /32), 24 fps,
-  4-15 s, with **native stereo audio** (32 kHz). The adapter re-encodes to the
+- ``POST {base}/v1/videos/sync`` with a **multipart/form-data** body returns the
+  finished MP4 directly (HTTP 200). There is also an async ``POST /v1/videos``, but
+  the recipe does not document its job-id/polling schema, so the synchronous endpoint
+  is the confirmed path (and what the benchmark drives).
+- Form fields: ``prompt``, ``fps`` (fixed 24), ``num_inference_steps``,
+  ``flow_shift``, ``seed``, ``extra_params`` (a JSON string), and ``width`` /
+  ``height`` (multiples of 32) with an optional ``aspect_ratio``.
+- ``extra_params`` JSON: ``{"task": "fl2va", "duration": <s>, "audio_flow_shift": 3.0}``.
+  ``task`` is ``fl2va`` (text / first-last-frame -> video) or ``ref2va``; we use
+  ``fl2va`` with a single first-frame keyframe.
+- The keyframe is **uploaded as the ``input_reference`` file's bytes** — not a
+  ``file://`` URI and not base64 — so no server-side mount is required. (The
+  ``input_references`` plural field is only for the two-image first/last form with
+  ``frame_indices``, which we do not use.)
+- Output is H.264 at 24 fps with native stereo AAC audio (32 kHz). ``duration`` is
+  4-15 s, quantised to H3's ``17n+5`` frame schedule. The adapter re-encodes to the
   assembler's 1280x720 / 24 fps / AAC 48 kHz before returning, so the recovery
   resolution check and the ffmpeg assembly stay unchanged.
 
@@ -29,35 +30,47 @@ the retry-once + animated-still swap in ``video_recovery`` drives it unchanged. 
 self-hosted, so each call costs $0: no T007 approval record is required. This module
 follows the same conventions as ``fishaudio.py`` — ``urllib.request`` with an
 injectable ``urlopen``, ``load_env``, and ffprobe/ffmpeg via the vendored tools.
+
+Two gates are kept for the MiniMax-H3 video path:
+
+1. ``MiniMaxH3VideoProvider`` — self-hosted vLLM-Omni on the presenter's GPU server
+   (no API key; just ``MINIMAX_H3_BASE_URL``). This is the implemented gate.
+2. ``MiniMaxH3CloudProvider`` — reserved for a future MiniMax-hosted cloud API
+   (API key + URL). Its contract is unconfirmed and it would be a paid call, so it
+   raises until T007's guards exist and the cost is approved. It only reserves the
+   gate so the path is not lost.
 """
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import subprocess
-import time
+import uuid
 from pathlib import Path
 from typing import Any, Callable, Mapping
 from urllib import request
 from urllib.error import HTTPError, URLError
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 from src.env import load_env
 
 from .contracts import ShotRenderResult
 
-DEFAULT_BASE_URL = "http://127.0.0.1:30010"
-DEFAULT_MODEL = "MiniMaxAI/MiniMax-H3"
+DEFAULT_BASE_URL = "http://127.0.0.1:8000"  # vLLM-Omni default port
 DEFAULT_VARIANT = "fl2va"
 VARIANTS = ("fl2va", "ref2va")
-DEFAULT_MEDIA_BASE_URI = "file:///data/minimax-h3"
-DEFAULT_SHORT_EDGE = 768
+DEFAULT_WIDTH = 1024  # 16:9, multiple of 32; A6000-safe (see api-notes)
+DEFAULT_HEIGHT = 576
 DEFAULT_ASPECT_RATIO = "16:9"
+DEFAULT_FPS = 24.0
 DEFAULT_NUM_INFERENCE_STEPS = 50
+DEFAULT_FLOW_SHIFT = 12.0
+DEFAULT_AUDIO_FLOW_SHIFT = 3.0
 MIN_SECONDS = 4.0
 MAX_SECONDS = 15.0
-GENERATION_TIMEOUT_S = 600.0
-POLL_INTERVAL_S = 3.0
+GENERATION_TIMEOUT_S = 3600.0  # /v1/videos/sync blocks for the whole render
 
 # The assembler's fixed timeline resolution/frame-rate; H3 output is re-encoded to
 # this before the recovery resolution check and ffmpeg assembly run against it.
@@ -103,43 +116,93 @@ def compile_prompt(shot: Mapping[str, Any]) -> str:
     return " ".join(parts)
 
 
-def keyframe_condition(uri: str, frame_index: int = 0) -> dict[str, Any]:
-    """One image-to-video keyframe condition (first frame pins the shot's look)."""
-    return {"type": "image", "uri": uri, "role": "keyframe", "frame_index": frame_index}
+def extra_params(*, task: str, duration: float, audio_flow_shift: float) -> str:
+    """The ``extra_params`` JSON string vLLM-Omni expects for a MiniMax-H3 request."""
+    return json.dumps(
+        {"task": task, "duration": duration, "audio_flow_shift": audio_flow_shift},
+        separators=(",", ":"),
+    )
 
 
-def keyframe_uri(media_base_uri: str, run_id: str, shot_id: str) -> str:
-    """The server-visible ``file://`` URI for a shot's keyframe under the mount."""
-    return f"{media_base_uri.rstrip('/')}/{run_id}/keyframes/{shot_id}.png"
-
-
-def build_request_body(
+def build_request_fields(
     *,
-    model: str,
     prompt: str,
     seconds: float,
-    keyframe_uri: str,
+    keyframe_bytes: bytes,
     task: str = DEFAULT_VARIANT,
-    short_edge: int = DEFAULT_SHORT_EDGE,
+    width: int = DEFAULT_WIDTH,
+    height: int = DEFAULT_HEIGHT,
     aspect_ratio: str = DEFAULT_ASPECT_RATIO,
+    fps: float = DEFAULT_FPS,
     num_inference_steps: int = DEFAULT_NUM_INFERENCE_STEPS,
+    flow_shift: float = DEFAULT_FLOW_SHIFT,
+    audio_flow_shift: float = DEFAULT_AUDIO_FLOW_SHIFT,
     seed: int,
-) -> dict[str, Any]:
-    """The confirmed SGLang ``POST /v1/videos`` body for a first-frame fl2va shot."""
-    return {
-        "model": model,
+) -> tuple[dict[str, str], dict[str, tuple[str, bytes, str]]]:
+    """The confirmed vLLM-Omni multipart fields + files for a first-frame fl2va shot."""
+    fields: dict[str, str] = {
         "prompt": prompt,
-        "seconds": seconds,
-        "task": task,
-        "conditions": [keyframe_condition(keyframe_uri, 0)],
-        "target": {"short_edge": short_edge, "aspect_ratio": aspect_ratio, "duration_seconds": seconds},
-        "quality": "exact",
-        "num_outputs_per_prompt": 1,
-        "num_inference_steps": num_inference_steps,
-        "flow_shift": 12.0,
-        "audio_flow_shift": 3.0,
-        "seed": seed,
+        "fps": str(fps),
+        "num_inference_steps": str(num_inference_steps),
+        "flow_shift": str(flow_shift),
+        "seed": str(seed),
+        "extra_params": extra_params(task=task, duration=seconds, audio_flow_shift=audio_flow_shift),
+        "width": str(width),
+        "height": str(height),
+        "aspect_ratio": aspect_ratio,
     }
+    # Single first-frame conditioning uses the singular ``input_reference`` (the plural
+    # ``input_references`` + ``frame_indices`` form is only for first/last two-image).
+    files: dict[str, tuple[str, bytes, str]] = {
+        "input_reference": ("keyframe.png", keyframe_bytes, "image/png"),
+    }
+    return fields, files
+
+
+def encode_multipart(
+    fields: Mapping[str, str],
+    files: Mapping[str, tuple[str, bytes, str]],
+) -> tuple[bytes, str]:
+    """Encode a multipart/form-data body (RFC 7578) and return (body, Content-Type)."""
+    boundary = "----headline-comic-minimax-h3-" + uuid.uuid4().hex
+    parts: list[bytes] = []
+    for name, value in fields.items():
+        parts.append(f"--{boundary}\r\n".encode("utf-8"))
+        parts.append(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"))
+        parts.append(f"{value}\r\n".encode("utf-8"))
+    for name, (filename, data, ctype) in files.items():
+        parts.append(f"--{boundary}\r\n".encode("utf-8"))
+        parts.append(
+            f'Content-Disposition: form-data; name="{name}"; filename="{filename}"\r\n'.encode("utf-8")
+        )
+        parts.append(f"Content-Type: {ctype}\r\n\r\n".encode("utf-8"))
+        parts.append(data)
+        parts.append(b"\r\n")
+    parts.append(f"--{boundary}--\r\n".encode("utf-8"))
+    return b"".join(parts), f"multipart/form-data; boundary={boundary}"
+
+
+def _split_auth(base_url: str) -> tuple[str, str | None, str | None]:
+    """Split ``user:pass@`` userinfo out of ``base_url`` into a Basic-auth pair.
+
+    Returns ``(clean_url, username, password)``. When the URL carries no userinfo,
+    ``username`` (and ``password``) is ``None``, so the caller can tell "no auth
+    configured" apart from "auth with an empty password".
+    """
+    parts = urlsplit(base_url)
+    if parts.username is None:
+        return base_url.rstrip("/"), None, None
+    username = unquote(parts.username)
+    password = unquote(parts.password) if parts.password is not None else ""
+    netloc = parts.netloc.rsplit("@", 1)[1]
+    clean = urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+    return clean.rstrip("/"), username, password
+
+
+def _basic_auth(username: str, password: str) -> str:
+    """The ``Authorization: Basic ...`` header value for ``username:password``."""
+    token = base64.b64encode(f"{username}:{password}".encode("utf-8")).decode("ascii")
+    return f"Basic {token}"
 
 
 def _stable_seed(shot_id: str) -> int:
@@ -175,11 +238,12 @@ def _error_detail(exc: HTTPError) -> str:
 
 
 class MiniMaxH3VideoProvider:
-    """Render one shot at a time through MiniMax-H3 over SGLang, returning its clip.
+    """Render one shot at a time through MiniMax-H3 over vLLM-Omni, returning its clip.
 
-    Env config (all optional, with local-device defaults): ``MINIMAX_H3_BASE_URL``,
-    ``MINIMAX_H3_MODEL``, ``MINIMAX_H3_VARIANT``, ``MINIMAX_H3_MEDIA_BASE_URI``,
-    ``MINIMAX_H3_SHORT_EDGE``, ``MINIMAX_H3_ASPECT_RATIO``,
+    Env config (all optional, with local-device defaults): ``MINIMAX_H3_BASE_URL``
+    (may carry ``user:pass@`` userinfo for HTTP Basic auth, or set
+    ``MINIMAX_H3_USERNAME``/``MINIMAX_H3_PASSWORD`` instead), ``MINIMAX_H3_VARIANT``,
+    ``MINIMAX_H3_WIDTH``, ``MINIMAX_H3_HEIGHT``, ``MINIMAX_H3_ASPECT_RATIO``,
     ``MINIMAX_H3_NUM_INFERENCE_STEPS``.
     """
 
@@ -187,42 +251,49 @@ class MiniMaxH3VideoProvider:
         self,
         *,
         base_url: str | None = None,
-        model: str | None = None,
         variant: str | None = None,
-        media_base_uri: str | None = None,
-        short_edge: int | None = None,
+        width: int | None = None,
+        height: int | None = None,
         aspect_ratio: str | None = None,
+        fps: float | None = None,
         num_inference_steps: int | None = None,
+        flow_shift: float | None = None,
+        audio_flow_shift: float | None = None,
         seed: int | None = None,
         timeout: float = GENERATION_TIMEOUT_S,
-        poll_interval: float = POLL_INTERVAL_S,
         urlopen: Callable[..., Any] | None = None,
         probe: Callable[[Path], tuple[float, int, int]] | None = None,
         run: Callable = subprocess.run,
-        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         load_env(_PROJECT_ROOT / ".env")
-        self.base_url = (base_url or os.environ.get("MINIMAX_H3_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
-        self.model = (model or os.environ.get("MINIMAX_H3_MODEL") or DEFAULT_MODEL).strip()
+        raw_base_url = base_url or os.environ.get("MINIMAX_H3_BASE_URL") or DEFAULT_BASE_URL
+        self.base_url, url_user, url_pass = _split_auth(raw_base_url)
+        env_user = os.environ.get("MINIMAX_H3_USERNAME")
+        env_pass = os.environ.get("MINIMAX_H3_PASSWORD")
+        self._username = env_user if env_user is not None else url_user
+        self._password = env_pass if env_pass is not None else (url_pass or "")
         self.variant = (variant or os.environ.get("MINIMAX_H3_VARIANT") or DEFAULT_VARIANT).strip()
         if self.variant not in VARIANTS:
             raise ValueError(f"variant must be one of {VARIANTS}")
-        self.media_base_uri = (
-            media_base_uri or os.environ.get("MINIMAX_H3_MEDIA_BASE_URI") or DEFAULT_MEDIA_BASE_URI
-        ).rstrip("/")
-        self.short_edge = int(short_edge or os.environ.get("MINIMAX_H3_SHORT_EDGE") or DEFAULT_SHORT_EDGE)
-        self.aspect_ratio = (aspect_ratio or os.environ.get("MINIMAX_H3_ASPECT_RATIO") or DEFAULT_ASPECT_RATIO).strip()
+        self.width = int(width or os.environ.get("MINIMAX_H3_WIDTH") or DEFAULT_WIDTH)
+        self.height = int(height or os.environ.get("MINIMAX_H3_HEIGHT") or DEFAULT_HEIGHT)
+        self.aspect_ratio = (
+            aspect_ratio or os.environ.get("MINIMAX_H3_ASPECT_RATIO") or DEFAULT_ASPECT_RATIO
+        ).strip()
+        self.fps = float(fps or os.environ.get("MINIMAX_H3_FPS") or DEFAULT_FPS)
         self.num_inference_steps = int(
             num_inference_steps or os.environ.get("MINIMAX_H3_NUM_INFERENCE_STEPS") or DEFAULT_NUM_INFERENCE_STEPS
         )
+        self.flow_shift = float(flow_shift or os.environ.get("MINIMAX_H3_FLOW_SHIFT") or DEFAULT_FLOW_SHIFT)
+        self.audio_flow_shift = float(
+            audio_flow_shift or os.environ.get("MINIMAX_H3_AUDIO_FLOW_SHIFT") or DEFAULT_AUDIO_FLOW_SHIFT
+        )
         self.seed = seed
         self.timeout = timeout
-        self.poll_interval = poll_interval
         self.repo_root = _PROJECT_ROOT
         self._urlopen = urlopen or request.urlopen
         self._probe = probe or self._probe_ffprobe
         self._run = run
-        self._sleep = sleep
 
     def renderer(
         self,
@@ -238,12 +309,11 @@ class MiniMaxH3VideoProvider:
         if not isinstance(storyboard.get("shots"), list):
             raise MiniMaxH3Error("storyboard must contain a shots array")
         keyframes_dir = Path(keyframes_dir)
-        run_id = keyframes_dir.parent.name
         shots_dir = keyframes_dir.parent / "shots"
         shots_dir.mkdir(parents=True, exist_ok=True)
 
         def render(shot: Mapping[str, Any]) -> ShotRenderResult:
-            return self._render_shot(shot, keyframes_dir=keyframes_dir, shots_dir=shots_dir, run_id=run_id)
+            return self._render_shot(shot, keyframes_dir=keyframes_dir, shots_dir=shots_dir)
 
         return render
 
@@ -253,7 +323,6 @@ class MiniMaxH3VideoProvider:
         *,
         keyframes_dir: Path,
         shots_dir: Path,
-        run_id: str,
     ) -> ShotRenderResult:
         shot_id = str(shot.get("shot_id") or "").strip()
         if not shot_id:
@@ -266,83 +335,53 @@ class MiniMaxH3VideoProvider:
             raise MiniMaxH3Error(f"keyframe missing for {shot_id}: {keyframe}")
 
         seconds = round(min(max(duration, MIN_SECONDS), MAX_SECONDS), 1)
-        body = build_request_body(
-            model=self.model,
+        fields, files = build_request_fields(
             prompt=compile_prompt(shot),
             seconds=seconds,
-            keyframe_uri=keyframe_uri(self.media_base_uri, run_id, shot_id),
+            keyframe_bytes=keyframe.read_bytes(),
             task=self.variant,
-            short_edge=self.short_edge,
+            width=self.width,
+            height=self.height,
             aspect_ratio=self.aspect_ratio,
+            fps=self.fps,
             num_inference_steps=self.num_inference_steps,
+            flow_shift=self.flow_shift,
+            audio_flow_shift=self.audio_flow_shift,
             seed=self.seed if self.seed is not None else _stable_seed(shot_id),
         )
-
-        job_id = self._submit(body)
+        body, content_type = encode_multipart(fields, files)
         raw = shots_dir / f"{shot_id}-raw.mp4"
-        self._await(job_id, raw)
+        raw.parent.mkdir(parents=True, exist_ok=True)
+        raw.write_bytes(self._submit_sync(body, content_type))
         final = shots_dir / f"{shot_id}.mp4"
         self._normalize(raw, final)
         duration_s, width, height = self._probe(final)
         return ShotRenderResult(path=final, duration_s=duration_s, width=width, height=height)
 
-    def _submit(self, body: Mapping[str, Any]) -> str:
+    def _submit_sync(self, body: bytes, content_type: str) -> bytes:
+        headers = {"Content-Type": content_type}
+        if self._username is not None:
+            headers["Authorization"] = _basic_auth(self._username, self._password or "")
         req = request.Request(
-            f"{self.base_url}/v1/videos",
-            data=json.dumps(body).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            f"{self.base_url}/v1/videos/sync",
+            data=body,
+            headers=headers,
             method="POST",
         )
         try:
             with self._urlopen(req, timeout=self.timeout) as resp:
-                payload = json.loads(resp.read().decode("utf-8"))
-        except HTTPError as exc:
-            raise MiniMaxH3Error(f"H3 submit HTTP {exc.code}: {_error_detail(exc)}") from exc
-        except URLError as exc:
-            raise MiniMaxH3Error(f"H3 submit network error: {exc.reason}") from exc
-        job_id = payload.get("id") or payload.get("request_id") or payload.get("video_id")
-        if not job_id:
-            raise MiniMaxH3Error(f"H3 submit returned no job id: {payload}")
-        return str(job_id)
-
-    def _status(self, job_id: str) -> str:
-        req = request.Request(f"{self.base_url}/v1/videos/{job_id}", method="GET")
-        try:
-            with self._urlopen(req, timeout=self.timeout) as resp:
-                payload = json.loads(resp.read().decode("utf-8"))
-        except HTTPError as exc:
-            raise MiniMaxH3Error(f"H3 status HTTP {exc.code}: {_error_detail(exc)}") from exc
-        except URLError as exc:
-            raise MiniMaxH3Error(f"H3 status network error: {exc.reason}") from exc
-        status = str(payload.get("status") or "").strip().lower()
-        if not status:
-            raise MiniMaxH3Error(f"H3 status returned no status: {payload}")
-        return status
-
-    def _await(self, job_id: str, output: Path) -> None:
-        deadline = time.monotonic() + self.timeout
-        while True:
-            status = self._status(job_id)
-            if status in ("completed", "succeeded", "success"):
-                self._download(job_id, output)
-                return
-            if status in ("failed", "error", "cancelled", "canceled"):
-                raise MiniMaxH3Error(f"H3 generation failed: {status}")
-            if time.monotonic() >= deadline:
-                raise MiniMaxH3TimeoutError(f"H3 generation timed out for job {job_id}")
-            self._sleep(self.poll_interval)
-
-    def _download(self, job_id: str, output: Path) -> None:
-        req = request.Request(f"{self.base_url}/v1/videos/{job_id}/content", method="GET")
-        try:
-            with self._urlopen(req, timeout=self.timeout) as resp:
                 data = resp.read()
         except HTTPError as exc:
-            raise MiniMaxH3Error(f"H3 content HTTP {exc.code}: {_error_detail(exc)}") from exc
+            raise MiniMaxH3Error(f"H3 sync HTTP {exc.code}: {_error_detail(exc)}") from exc
+        except TimeoutError as exc:
+            raise MiniMaxH3TimeoutError(f"H3 sync timed out after {self.timeout}s") from exc
         except URLError as exc:
-            raise MiniMaxH3Error(f"H3 content network error: {exc.reason}") from exc
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_bytes(data)
+            if isinstance(exc.reason, TimeoutError):
+                raise MiniMaxH3TimeoutError(f"H3 sync timed out after {self.timeout}s") from exc
+            raise MiniMaxH3Error(f"H3 sync network error: {exc.reason}") from exc
+        if not data:
+            raise MiniMaxH3Error("H3 sync returned empty content")
+        return data
 
     def _normalize(self, source: Path, output: Path) -> None:
         ffmpeg = _find_tool(self.repo_root, "ffmpeg")
@@ -381,3 +420,25 @@ class MiniMaxH3VideoProvider:
         width = int(video[0].get("width") or 0)
         height = int(video[0].get("height") or 0)
         return duration, width, height
+
+
+class MiniMaxH3CloudProvider:
+    """Reserved gate for the future MiniMax-hosted cloud API (API key + URL).
+
+    NOT IMPLEMENTED: the hosted endpoint contract is unconfirmed and, per the project
+    rules, no paid video call may be made until T007's guards exist and the expected
+    cost is approved. This class only reserves the gate and documents the intended env
+    vars (``MINIMAX_H3_API_URL``, ``MINIMAX_H3_API_KEY``) so the path is not lost.
+    """
+
+    def __init__(self, *, api_url: str | None = None, api_key: str | None = None) -> None:
+        load_env(_PROJECT_ROOT / ".env")
+        self.api_url = (api_url or os.environ.get("MINIMAX_H3_API_URL") or "").strip()
+        self.api_key = (api_key or os.environ.get("MINIMAX_H3_API_KEY") or "").strip()
+
+    def renderer(self, storyboard: Mapping[str, Any], keyframes_dir: Path | str) -> Callable:
+        raise MiniMaxH3Error(
+            "MiniMax-H3 cloud API is not implemented yet: the hosted endpoint contract "
+            "is unconfirmed and a paid video call requires T007 approval. Use the "
+            "self-hosted --video minimax-h3 gate instead."
+        )
